@@ -1,0 +1,72 @@
+[*]
+[*] GTKWave Analyzer Save File - Lab03 Digital 2
+[*] Top Level Testbench (tb_top)
+[*]
+[dumpfile] "tb_top.vcd"
+[savefile] "tb_top.gtkw"
+[timestart] 0
+[size] 1920 1017
+[pos] -1 -1
+*-24.000000 500000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_top.
+[treeopen] tb_top.uut.
+@28
+tb_top.clk
+@200
+-=============================
+-1. ENTRADAS FISICAS Y PULSOS
+-=============================
+@22
+tb_top.sw[3:0]
+@28
+tb_top.btn[3:0]
+tb_top.uut.btn_pulse[3:0]
+@200
+-=============================
+-2. BANCO DE REGISTROS
+-=============================
+@22
+tb_top.uut.u_reg_bank.reg_sel[1:0]
+tb_top.rgb[2:0]
+@24
+tb_top.R0[3:0]
+tb_top.R1[3:0]
+tb_top.R2[3:0]
+tb_top.R3[3:0]
+@200
+-=============================
+-3. SECUENCIADOR Y OPERANDOS
+-=============================
+@24
+tb_top.uut.u_comb.idx[2:0]
+@22
+tb_top.addr_a[1:0]
+tb_top.addr_b[1:0]
+tb_top.led[3:0]
+@200
+-=============================
+-4. UNIDAD ALU (PROCESAMIENTO)
+-=============================
+@24
+tb_top.uut.u_alu.A[3:0]
+tb_top.uut.u_alu.B[3:0]
+@22
+tb_top.uut.u_alu.op[2:0]
+@24
+tb_top.uut.u_alu.result[4:0]
+@200
+-=============================
+-5. RETENCION Y DISPLAY TM1637
+-=============================
+@28
+tb_top.uut.u_display.exec
+@24
+tb_top.result_q[4:0]
+@22
+tb_top.op_q[2:0]
+tb_top.seg_data[31:0]
+@28
+tb_top.tm_clk
+tb_top.tm_dio
+[pattern_trace] 1
+[pattern_trace] 0
