@@ -295,7 +295,7 @@ Señales: `btn`, `ar.estable`, `ar.contador` (decimal) y `pulso`. Se muestra el 
 
 #### Registro del resultado (`tb_almacenamiento.v`)
 
-![Simulación del registro del resultado](sim/GTKWAVE_IMAGES/tb_reg_resultado.png)
+![Simulación del registro del resultado](sim/GTKWave_Images/tb_reg_resultado.png)
 
 Señales: `clk`, `ejecutar`, `result_in`, `op_in`, `result` y `op`, en decimal y binario. Se muestra el tramo final de la simulación, desde ~1100 ns.
 
@@ -303,7 +303,7 @@ Señales: `clk`, `ejecutar`, `result_in`, `op_in`, `result` y `op`, en decimal y
 
 #### LEDs y LED RGB (`tb_indicadores.v`)
 
-![Simulación de los indicadores](sim/GTKWAVE_IMAGES/tb_indicadores.png)
+![Simulación de los indicadores](sim/GTKWave_Images/tb_indicadores.png)
 
 Señales: `addr_a`, `addr_b`, `led` (binario), `addr_w`, `r`, `g` y `b`. Cada prueba dura 10 ns.
 
