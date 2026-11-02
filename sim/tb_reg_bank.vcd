@@ -1,0 +1,282 @@
+$date
+	Sun Nov 01 21:34:38 2026
+$end
+$version
+	Icarus Verilog
+$end
+$timescale
+	1ps
+$end
+$scope module tb_reg_bank $end
+$var wire 4 ! R0 [3:0] $end
+$var wire 4 " R1 [3:0] $end
+$var wire 4 # R2 [3:0] $end
+$var wire 4 $ R3 [3:0] $end
+$var wire 4 % data_b [3:0] $end
+$var wire 4 & data_a [3:0] $end
+$var wire 2 ' addr_w [1:0] $end
+$var reg 2 ( addr_a [1:0] $end
+$var reg 2 ) addr_b [1:0] $end
+$var reg 1 * clk $end
+$var reg 4 + data_w [3:0] $end
+$var reg 1 , siguiente $end
+$var reg 1 - write_enable $end
+$var integer 32 . errores [31:0] $end
+$var integer 32 / i [31:0] $end
+$scope module banco $end
+$var wire 2 0 addr_a [1:0] $end
+$var wire 2 1 addr_b [1:0] $end
+$var wire 1 * clk $end
+$var wire 4 2 data_w [3:0] $end
+$var wire 1 - write_enable $end
+$var wire 2 3 addr_w [1:0] $end
+$var reg 4 4 data_a [3:0] $end
+$var reg 4 5 data_b [3:0] $end
+$var reg 4 6 r0 [3:0] $end
+$var reg 4 7 r1 [3:0] $end
+$var reg 4 8 r2 [3:0] $end
+$var reg 4 9 r3 [3:0] $end
+$upscope $end
+$scope module sel $end
+$var wire 1 * clk $end
+$var wire 1 , siguiente $end
+$var reg 2 : addr_w [1:0] $end
+$upscope $end
+$scope task leer $end
+$var reg 2 ; a [1:0] $end
+$var reg 2 < b [1:0] $end
+$upscope $end
+$scope task pulso_btn0 $end
+$upscope $end
+$scope task pulso_btn1 $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+$comment Show the parameter values. $end
+$dumpall
+$end
+#0
+$dumpvars
+bx <
+bx ;
+b0 :
+b0 9
+b0 8
+b0 7
+b0 6
+b0 5
+b0 4
+b0 3
+b0 2
+b0 1
+b0 0
+bx /
+b0 .
+0-
+0,
+b0 +
+0*
+b0 )
+b0 (
+b0 '
+b0 &
+b0 %
+b0 $
+b0 #
+b0 "
+b0 !
+$end
+#4000
+1*
+#8000
+0*
+#12000
+1*
+#16000
+0*
+#20000
+1*
+#24000
+b101 +
+b101 2
+b0 /
+0*
+#28000
+1*
+#32000
+1-
+0*
+#36000
+b101 %
+b101 5
+b101 &
+b101 4
+b101 !
+b101 6
+1*
+#40000
+0-
+0*
+#44000
+1*
+#48000
+1,
+0*
+#52000
+b1 '
+b1 3
+b1 :
+1*
+#56000
+b11 +
+b11 2
+b1 /
+0,
+0*
+#60000
+1*
+#64000
+1-
+0*
+#68000
+b11 "
+b11 7
+1*
+#72000
+0-
+0*
+#76000
+1*
+#80000
+1,
+0*
+#84000
+b10 '
+b10 3
+b10 :
+1*
+#88000
+b1100 +
+b1100 2
+b10 /
+0,
+0*
+#92000
+1*
+#96000
+1-
+0*
+#100000
+b1100 #
+b1100 8
+1*
+#104000
+0-
+0*
+#108000
+1*
+#112000
+1,
+0*
+#116000
+b11 '
+b11 3
+b11 :
+1*
+#120000
+b1001 +
+b1001 2
+b11 /
+0,
+0*
+#124000
+1*
+#128000
+1-
+0*
+#132000
+b1001 $
+b1001 9
+1*
+#136000
+0-
+0*
+#140000
+1*
+#144000
+1,
+0*
+#148000
+b0 '
+b0 3
+b0 :
+1*
+#152000
+b1111 +
+b1111 2
+b100 /
+0,
+0*
+#156000
+1*
+#160000
+0*
+#164000
+1*
+#168000
+0*
+#172000
+1*
+#176000
+0*
+#180000
+1*
+#184000
+0*
+#188000
+1*
+#192000
+b11 %
+b11 5
+b1 )
+b1 1
+b1 <
+b0 ;
+0*
+#193000
+b1100 %
+b1100 5
+b10 )
+b10 1
+b10 <
+#194000
+b1001 %
+b1001 5
+b11 )
+b11 1
+b11 <
+#195000
+b1100 %
+b1100 5
+b11 &
+b11 4
+b10 )
+b10 1
+b1 (
+b1 0
+b10 <
+b1 ;
+#196000
+b1001 %
+b1001 5
+b11 )
+b11 1
+b11 <
+1*
+#197000
+b1100 &
+b1100 4
+b10 (
+b10 0
+b10 ;
+#198000
