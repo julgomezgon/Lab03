@@ -13,10 +13,10 @@
 
 ## Índice
 
-1. [Descripción del sistema](#1-descripción-del-sistema)
-2. [Arquitectura modular](#2-arquitectura-modular)
-3. [Interfaz de usuario](#3-interfaz-de-usuario)
-4. [Estrategia de visualización](#4-estrategia-de-visualización)
+1. [Introducción](#1-introducción)
+2. [Descripción del sistema](#2-descripción-del-sistema)
+3. [Arquitectura modular](#3-arquitectura-modular)
+4. [Diseño de los módulos](#4-diseño-de-los-módulos)
 5. [Simulación](#5-simulación)
 6. [Implementación en FPGA](#6-implementación-en-fpga)
 7. [Evidencia de funcionamiento en FPGA](#7-evidencia-de-funcionamiento-en-fpga)
@@ -29,7 +29,7 @@
 
 Se diseñó e implementó un sistema digital de 4 bits sobre la tarjeta Zybo Z7. El sistema permite guardar datos en un banco de cuatro registros, escoger dos de ellos como operandos, operarlos con una unidad aritmético-lógica (ALU) y mostrar el resultado en un display de 7 segmentos controlado por el circuito integrado TM1637.
 
-El sistema se construyó por módulos, donde cada bloque cumple una función concreta, como almacenar datos, seleccionar operandos, calcular o mostrar el resultado, y se prueba por separado antes de integrarlo con los demás en el archivo `top.v`, que se limita a conectar los módulos entre sí y con los pines de la tarjeta. Esta forma de trabajo nos permite reutilizar bloques y hace que el diseño sea más fácil de entender y de ampliar. Además, el display que será implementado, va a conservar el resultado de la última operación hasta que se presione BTN3, aunque después cambien los operandos, la combinación de registros o la operación seleccionada. Por esta razón el diseño incluye un registro que guarda el resultado en el momento de la ejecución y lo mantiene mientras no se ejecute una nueva operación.
+El sistema se construyó por módulos, donde cada bloque cumple una función concreta, como almacenar datos, seleccionar operandos, calcular o mostrar el resultado, y se prueba por separado antes de integrarlo con los demás en el archivo `top.v`, que se limita a conectar los módulos entre sí y con los pines de la tarjeta. Esta forma de trabajo nos permite reutilizar bloques y hace que el diseño sea más fácil de entender y de ampliar. Además, el display que será implementado, conserva el resultado de la última operación hasta que se presione BTN3, aunque después cambien los operandos, la combinación de registros o la operación seleccionada. Por esta razón el diseño incluye un registro que guarda el resultado en el momento de la ejecución y lo mantiene mientras no se ejecute una nueva operación.
 
 
 ## 2. Descripción del sistema
@@ -81,7 +81,6 @@ La ALU realiza ocho operaciones, dos aritméticas y seis lógicas, que se eligen
 | 110 | NOT | NOT A | Binario |
 | 111 | NAND | A NAND B | Binario |
 
-La razón de usar decimal en unas operaciones y binario en otras se explica en la sección 5.
 
 
 ## 3. Arquitectura modular
@@ -117,7 +116,7 @@ La lectura del banco la controla `comb_selector`, que entrega las direcciones `a
 
 La ALU recibe `dato_a`, `dato_b` y el código de SW[2:0], y calcula `alu_result` de forma continua, pero este valor no llega directo al display , porque con el pulso de BTN3 `reg_resultado` copia el resultado y el código de la operación en `res_guardado` y `op_guardada`, que son los valores que recibe `display_tm1637`. Este registro intermedio, permite que el display no se altera cuando cambian los operandos o los switches después de una ejecución.
 
-Por último, `display_tm1637` genera las señales `tm_clk` y `tm_dio`, que salen por un puerto Pmod de la tarjeta hacia el módulo del display.
+Por último, `display_tm1637` genera las señales `tm_clk` y `tm_dio`, que salen por un puerto Pmod JC de la tarjeta hacia el módulo del display.
 
 La siguiente tabla resume las señales internas declaradas en `top.v`, con el módulo que genera cada una y los módulos que la reciben.
 
@@ -142,11 +141,11 @@ Para describir el funcionamiento interno de cada módulo, se va a realizar el re
 
 ### 4.1 Antirrebote
 
-Al presionar o soltar un pulsador, el contacto mecánico rebota durante algunos milisegundos y la señal oscila varias veces entre 0 y 1 antes de quedarse estable. Si esa señal llegara directo a la lógica, una sola pulsación podría contarse como varias (entonces no hay certeza sobre si el estado es alto o bajo), por lo que cada botón pasa por el módulo `antirrebote` antes de usarse.
+Al presionar o soltar un pulsador, el contacto mecánico rebota durante algunos milisegundos y la señal oscila varias veces entre 0 y 1 antes de quedarse estable. Si esa señal llegara directo a la lógica, una sola pulsación podría contarse como varias, por lo tanto, cada botón pasa por el módulo `antirrebote` antes de usarse.
 
 El módulo trabaja en tres etapas. La primera es un sincronizador de dos flip-flops (`sync0` y `sync1`), porque el botón cambia en cualquier momento sin relación con el reloj de la FPGA, y una señal así puede dejar a un flip-flop en un estado indefinido durante un instante. La segunda etapa es un filtro que compara la entrada sincronizada con el último estado aceptado (`estable`) y cuenta los ciclos en que son diferentes, de modo que el cambio se acepta cuando se mantiene durante `LIMITE` ciclos seguidos y la cuenta vuelve a cero si un rebote devuelve la señal a su valor anterior. La tercera etapa genera la salida `pulso`, que vale 1 durante un ciclo de reloj cuando se acepta una pulsación y no se activa al soltar el botón.
 
-Con `LIMITE` igual a 1 250 000 y un reloj de 125 MHz, el cambio debe mantenerse 10 ms para ser aceptado, que es cuando esas oscilaciones descritas anteriormente terminan. El siguiente fragmento corresponde al filtro y a la generación del pulso.
+Con `LIMITE` igual a 1 250 000 y un reloj de 125 MHz, el cambio debe mantenerse 10 ms para ser aceptado, que es un margen adecuado para cuando estas oscilaciones terminan. El siguiente fragmento corresponde al filtro y a la generación del pulso.
 
 ```verilog
 // Filtro: el cambio debe durar LIMITE ciclos
@@ -460,7 +459,7 @@ Señales: `btn` y `sw` (binario), `dut.addr_a`, `dut.addr_b`, `led` (binario), `
 
 ### 6.1 Asignación de pines
 
-El archivo `constrs/zybo_z7.xdc` consta de los pines que se utilizaron para el módulo TM1637.
+El archivo `constrs/zybo_z7.xdc` asigna cada puerto de `top.v` a un pin de la Zybo Z7, como se resume en la siguiente tabla.
 
 | Señal | Pin | Elemento de la placa |
 | --- | :---: | --- |
