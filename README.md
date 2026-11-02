@@ -295,13 +295,21 @@ Señales: `btn`, `ar.estable`, `ar.contador` (decimal) y `pulso`. Se muestra el 
 
 #### Registro del resultado (`tb_almacenamiento.v`)
 
-![Simulación del registro del resultado](sim/GTKWave_Images/tb_reg_resultado.png)
+![Simulación del registro del resultado](sim/GTKWAVE_IMAGES/tb_reg_resultado.png)
 
 Señales: `clk`, `ejecutar`, `result_in`, `op_in`, `result` y `op`, en decimal y binario. Se muestra el tramo final de la simulación, desde ~1100 ns.
 
 `result_in` pasa a 9 y, mientras `ejecutar` está en 0, `result` sigue en 0. Con el primer pulso de `ejecutar`, `result` toma 9 y `op` toma `000`. Luego `result_in` cambia a 5 y `op_in` a `011`, pero `result` y `op` **se mantienen** en 9 y `000` hasta el segundo pulso de `ejecutar`, cuando pasan a 5 y `011`. Este es el mecanismo que conserva el resultado del display hasta presionar `BTN3`.
 
 #### LEDs y LED RGB (`tb_indicadores.v`)
+
+![Simulación de los indicadores](sim/GTKWAVE_IMAGES/tb_indicadores.png)
+
+Señales: `addr_a`, `addr_b`, `led` (binario), `addr_w`, `r`, `g` y `b`. Cada prueba dura 10 ns.
+
+- **0–60 ns, LEDs de operandos:** para cada pareja, `led` tiene en 1 exactamente los bits de los dos registros activos: `0011`, `0101`, `1001`, `0110`, `1010` y `1100`.
+- **60–100 ns, LED RGB:** `addr_w` recorre 0 a 3 y `{r, g, b}` toma `100` (rojo), `010` (verde), `001` (azul) y `110` (amarillo). Antes de los 60 ns `addr_w` aún no tiene valor asignado, por eso aparece indefinido.
+
 
 #### Trama del TM1637 (`tb_tm1637_trama.v`)
 
