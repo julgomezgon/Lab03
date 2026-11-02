@@ -27,204 +27,248 @@
 
 ## 1. Descripción del sistema
 
-Se implementó un sistema digital de 4 bits sobre la Zybo Z7, dividido en módulos independientes que se integran en `top.v`. El sistema está formado por:
+Se diseñó e implementó un sistema digital de 4 bits sobre la tarjeta Zybo Z7. El sistema permite guardar datos en un banco de cuatro registros, escoger dos de ellos como operandos, operarlos con una unidad aritmético-lógica (ALU) y mostrar el resultado en un display de 7 segmentos controlado por el circuito integrado TM1637.
 
-- Un **banco de 4 registros** de 4 bits (`R0`–`R3`).
-- Una **ALU de 4 bits** con 2 operaciones aritméticas y 6 lógicas.
-- Un **selector de combinaciones** que genera las parejas de operandos `(A, B)`.
-- Un **driver para el display TM1637** de 4 dígitos de 7 segmentos.
+El sistema se construyó por módulos, donde cada bloque cumple una función concreta, como almacenar datos, seleccionar operandos, calcular o mostrar el resultado, y se prueba por separado antes de integrarlo con los demás en el archivo `top.v`, que se limita a conectar los módulos entre sí y con los pines de la tarjeta. Esta forma de trabajo nos permite reutilizar bloques y hace que el diseño sea más fácil de entender y de ampliar. Además, el display que será implementado, va a conservar el resultado de la última operación hasta que se presione BTN3, aunque después cambien los operandos, la combinación de registros o la operación seleccionada. Por esta razón el diseño incluye un registro que guarda el resultado en el momento de la ejecución y lo mantiene mientras no se ejecute una nueva operación.
 
-El flujo de uso es:
 
-1. Se cargan valores en los registros con los switches.
-2. Se elige la pareja de registros que actúa como operandos.
-3. Se elige la operación con los switches y se ejecuta con `BTN3`.
-4. El resultado aparece en el display.
+## 2. Descripción del sistema
 
-El display solo se actualiza al presionar `BTN3`. Al ejecutar, se guardan el resultado de la ALU y el código de la operación en un registro; mientras no se vuelva a ejecutar, el display conserva ese valor aunque cambien los switches, los registros o la pareja de operandos.
+### 2.1 Funcionamiento general
 
----
+El sistema trabaja con datos de 4 bits y se controla con los cuatro switches y los cuatro botones de la Zybo Z7. Con ellos se guardan valores en cuatro registros (R0 a R3), se elige la pareja de registros que se va a operar, se selecciona la operación y se ejecuta. El resultado aparece en un display de cuatro dígitos conectado a la tarjeta.
 
-## 2. Arquitectura modular
+La tarjeta también indica el estado del sistema. El LED RGB muestra con un color qué registro está seleccionado para escritura, y los LEDs LD0 a LD3 señalan cuáles registros forman la pareja de operandos activa.
 
-### 2.1 Diagrama de bloques
+### 2.2 Requisitos de funcionamiento
 
-```mermaid
-flowchart LR
-    BTN["BTN[3:0]"] --> AR["antirrebote ×4"]
-    SW["SW[3:0]"]
+- Cada registro guarda un valor de 4 bits que se carga desde los switches y se conserva hasta que se vuelva a escribir.
+- Los operandos A y B se toman de una de las seis parejas posibles de registros, y cada pulsación de BTN2 avanza a la siguiente pareja.
+- La ALU realiza la operación indicada en SW[2:0] sobre los operandos de la pareja activa.
+- El resultado se guarda al presionar BTN3 y el display lo mantiene hasta la siguiente ejecución, aunque cambien los operandos, la pareja de registros o la operación seleccionada.
+- Cada pulsación de un botón produce una sola acción, sin importar los rebotes mecánicos del pulsador.
 
-    AR -- "pulso[0]" --> SEL["sel_escritura"]
-    AR -- "pulso[1]" --> BANK["reg_bank"]
-    AR -- "pulso[2]" --> COMB["comb_selector"]
-    AR -- "pulso[3]" --> RES["reg_resultado"]
+### 2.3 Controles e indicadores
 
-    SW -- "dato" --> BANK
-    SEL -- "addr_w" --> BANK
-    COMB -- "addr_a, addr_b" --> BANK
-    BANK -- "A, B" --> ALU["alu"]
-    SW -- "op" --> ALU
-    SW -- "op" --> RES
-    ALU -- "resultado" --> RES
-    RES -- "resultado, op" --> DISP["display_tm1637"]
-    DISP --> TM["TM1637 (CLK, DIO)"]
-
-    COMB -- "addr_a, addr_b" --> LEDS["leds_operandos"] --> LED["LED[3:0]"]
-    SEL -- "addr_w" --> RGB["rgb_registro"] --> LD6["LED RGB LD6"]
-```
-
-### 2.2 Módulos
-
-Los cinco módulos que pide la guía son la base del diseño. Se agregaron módulos pequeños para tareas que no corresponden a ninguno de ellos y que no deben quedar en `top.v`, ya que este solo instancia y conecta.
-
-| Módulo | Archivo | Tipo | Función |
-| --- | --- | --- | --- |
-| `alu` | `alu.v` | Combinacional | Ejecuta la operación indicada por `op` sobre `A` y `B`. |
-| `reg_bank` | `reg_bank.v` | Secuencial | 4 registros de 4 bits. Escritura síncrona con `write_enable`; lectura combinacional por dos puertos (`addr_a`, `addr_b`). |
-| `sel_escritura` | `reg_bank.v` | Secuencial | Contador de 2 bits que elige el registro de escritura. Avanza con `BTN0` (`R0 → R1 → R2 → R3 → R0`). |
-| `comb_selector` | `comb_selector.v` | Secuencial | Contador módulo 6 cuyo índice se traduce a una pareja `(A, B)`. Avanza con `BTN2`. |
-| `display_tm1637` | `display_tm1637.v` | Secuencial | Une `formato_display` y `tm1637_driver`. |
-| `formato_display` | `display_tm1637.v` | Combinacional | Convierte el resultado guardado en los 4 dígitos (decimal o binario) y luego en segmentos. |
-| `tm1637_driver` | `display_tm1637.v` | Secuencial | Máquina de estados que envía los dígitos al TM1637 por el bus `CLK`/`DIO`. |
-| `antirrebote` | `almacenamiento.v` | Secuencial | Sincroniza el botón y entrega **un pulso de un ciclo** por pulsación, filtrando rebotes menores a 10 ms. |
-| `reg_resultado` | `almacenamiento.v` | Secuencial | Guarda el resultado de la ALU y el código de operación solo cuando llega el pulso de `BTN3`. |
-| `leds_operandos` | `indicadores.v` | Combinacional | Enciende los LEDs de los dos registros activos. |
-| `rgb_registro` | `indicadores.v` | Combinacional | Asigna un color del LED RGB a cada registro de escritura. |
-| `top` | `top.v` | Estructural | Instancia los módulos y los conecta con los pines de la placa. |
-| `tm1637_monitor` | `tm1637_monitor.v` | Solo simulación | Lee el bus del TM1637 y reconstruye el texto del display. No se sintetiza. |
-
-**¿Por qué el antirrebote?** Un botón físico rebota durante unos milisegundos al presionarlo y al soltarlo. Sin filtro, una sola pulsación generaría varios flancos: `BTN0` saltaría registros, `BTN2` se saltaría combinaciones y `BTN1` escribiría varias veces. El antirrebote solo acepta un cambio si se mantiene durante 1 250 000 ciclos (10 ms a 125 MHz) y entrega un pulso de un ciclo únicamente al presionar.
-
-### 2.3 Operaciones de la ALU
-
-| `SW[2:0]` | Operación | Expresión | Tipo |
-| :---: | --- | --- | --- |
-| `000` | Suma | `A + B` | Aritmética |
-| `001` | Resta | `A - B` | Aritmética |
-| `010` | AND | `A & B` | Lógica |
-| `011` | OR | `A \| B` | Lógica |
-| `100` | XOR | `A ^ B` | Lógica |
-| `101` | XNOR | `~(A ^ B)` | Lógica |
-| `110` | NOT | `~A` | Lógica (solo usa `A`) |
-| `111` | NAND | `~(A & B)` | Lógica |
-
-La ALU es combinacional: su salida cambia en cuanto cambian los operandos o la operación. Por eso el resultado no se envía directo al display, sino que pasa por `reg_resultado`.
-
-El resultado es de 4 bits, así que la suma y la resta trabajan en **módulo 16**:
-
-- **Desborde de la suma:** si el resultado supera 15, se pierde el acarreo. Ejemplo: `12 + 9 = 21`, que se muestra como `5` (21 − 16).
-- **Resta con resultado negativo:** si `B > A`, el resultado da la vuelta. Ejemplo: `4 − 6 = −2`, que se muestra como `14` (16 − 2). El sistema no representa números negativos.
-
-### 2.4 Combinaciones de operandos
-
-Cada pulso de `BTN2` avanza el índice del selector. Después de la combinación 5 vuelve a la 0. `A` siempre es el registro de menor número, lo que define el orden de la resta.
-
-| Índice | A | B | `LED[3:0]` |
-| :---: | :---: | :---: | :---: |
-| 0 | R0 | R1 | `0011` |
-| 1 | R0 | R2 | `0101` |
-| 2 | R0 | R3 | `1001` |
-| 3 | R1 | R2 | `0110` |
-| 4 | R1 | R3 | `1010` |
-| 5 | R2 | R3 | `1100` |
-
----
-
-## 3. Interfaz de usuario
-
-### 3.1 Controles e indicadores
+El sistema se maneja con los switches y botones de la Zybo Z7, y su estado se observa en los LEDs y el display. La siguiente tabla resume la función que cumple cada uno de estos elementos dentro del diseño.
 
 | Elemento | Función |
-| --- | --- |
-| `SW[3:0]` | Dato a escribir en el registro seleccionado. |
-| `SW[2:0]` | Código de la operación de la ALU. |
-| `BTN0` | Selecciona el registro de escritura (`R0 → R1 → R2 → R3 → R0`). |
-| `BTN1` | Escribe el valor de `SW[3:0]` en el registro seleccionado. |
-| `BTN2` | Cambia la pareja de operandos `(A, B)`. |
-| `BTN3` | Ejecuta la operación y actualiza el display. |
-| `LED[3:0]` | Registros que forman la pareja activa. |
-| LED RGB (LD6) | Registro seleccionado para escritura. |
-| Display TM1637 | Resultado de la última operación ejecutada. |
+|---|---|
+| SW[3:0] | Dato que se escribe en un registro |
+| SW[2:0] | Código de la operación |
+| BTN0 | Cambia el registro de escritura (R0 → R1 → R2 → R3) |
+| BTN1 | Escribe el dato en el registro seleccionado |
+| BTN2 | Cambia la pareja de operandos |
+| BTN3 | Ejecuta la operación y actualiza el display |
+| LD0 a LD3 | Indican los registros de la pareja activa |
+| LED RGB | Indica el registro de escritura (R0 rojo, R1 verde, R2 azul, R3 amarillo) |
+| Display | Muestra el resultado de la última operación |
 
-| Registro de escritura | Color del LED RGB |
-| :---: | :---: |
-| R0 | Rojo |
-| R1 | Verde |
-| R2 | Azul |
-| R3 | Amarillo |
+Las parejas de operandos se recorren en el orden R0-R1, R0-R2, R0-R3, R1-R2, R1-R3 y R2-R3.
 
-### 3.2 Uso compartido de los switches
+### 2.4 Operaciones de la ALU
 
-La placa tiene 4 switches, y la guía los usa para el dato (`SW[3:0]`) y para la operación (`SW[2:0]`). Ambos usos no se cruzan porque cada uno se "congela" con un botón distinto:
+La ALU realiza ocho operaciones, dos aritméticas y seis lógicas, que se eligen con el código de tres bits de SW[2:0]. En la tabla se relaciona cada código con su operación y con el formato en que se presenta el resultado en el display. La operación NOT usa el operando A y no tiene en cuenta el valor de B.
 
-1. **Carga:** con el dato en `SW[3:0]`, `BTN1` lo guarda en el banco. Después los switches se pueden mover sin perder el valor.
-2. **Ejecución:** con la operación en `SW[2:0]`, `BTN3` guarda el resultado y el código de operación. `SW3` se ignora en este paso.
+| SW[2:0] | Operación | Resultado | Formato en el display |
+|---|---|---|---|
+| 000 | Suma | A + B | Decimal |
+| 001 | Resta | A − B | Decimal |
+| 010 | AND | A AND B | Binario |
+| 011 | OR | A OR B | Binario |
+| 100 | XOR | A XOR B | Binario |
+| 101 | XNOR | A XNOR B | Binario |
+| 110 | NOT | NOT A | Binario |
+| 111 | NAND | A NAND B | Binario |
 
-Por eso, después de cargar los datos siempre hay que poner los switches en el código de la operación antes de presionar `BTN3`.
+La razón de usar decimal en unas operaciones y binario en otras se explica en la sección 5.
 
-### 4.3 Secuencia de uso
 
-1. Con `BTN0`, elegir el registro (el LED RGB indica cuál).
-2. Poner el valor en `SW[3:0]` y presionar `BTN1`. Repetir para cada registro.
-3. Con `BTN2`, elegir la pareja de operandos (los LEDs indican cuál).
-4. Poner la operación en `SW[2:0]` y presionar `BTN3`.
+## 3. Arquitectura modular
 
----
+El diseño se dividió en módulos pequeños, estos se encuentran en siete archivos dentro de la carpeta `src/`, y el archivo `top.v` los instancia y los conecta con los pines de la tarjeta.
 
-## 4. Estrategia de visualización
+### 3.1 Módulos del diseño
 
-### 4.1 Formato según la operación
+La siguiente tabla presenta los módulos que forman el sistema, el archivo en el que se encuentra cada uno y la función que cumple.
 
-Se usan **dos sistemas de representación**, según el tipo de operación. Para decidirlo, el display usa el código de operación guardado al presionar `BTN3`, no el de los switches, así el formato tampoco cambia hasta una nueva ejecución.
+| Módulo | Archivo | Función |
+|---|---|---|
+| `antirrebote` | `almacenamiento.v` | Filtra los rebotes de un botón y entrega un pulso de un ciclo de reloj por cada pulsación. Se usan cuatro copias, una por botón |
+| `sel_escritura` | `reg_bank.v` | Guarda la dirección del registro que se va a escribir y la avanza con cada pulso de BTN0 |
+| `reg_bank` | `reg_bank.v` | Banco de cuatro registros de 4 bits. Escribe el dato de los switches con BTN1 y entrega al mismo tiempo los dos registros de la pareja activa |
+| `comb_selector` | `comb_selector.v` | Cuenta de 0 a 5 con cada pulso de BTN2 y traduce esa cuenta en las direcciones de los registros A y B |
+| `alu` | `alu.v` | Realiza la operación indicada por SW[2:0] sobre A y B. Es un circuito combinacional, por lo que su salida cambia en cuanto cambian sus entradas |
+| `reg_resultado` | `almacenamiento.v` | Guarda el resultado de la ALU y el código de la operación cuando llega el pulso de BTN3, y los conserva hasta la siguiente ejecución |
+| `display_tm1637` | `display_tm1637.v` | Convierte el resultado guardado en los cuatro dígitos del display y los envía al TM1637. Contiene los submódulos `formato_display` y `tm1637_driver` |
+| `leds_operandos` | `indicadores.v` | Enciende los LEDs de los dos registros de la pareja activa |
+| `rgb_registro` | `indicadores.v` | Asigna un color del LED RGB a cada registro de escritura |
+| `top` | `top.v` | Instancia todos los módulos y los conecta entre sí y con los pines de la tarjeta |
 
-**Aritméticas (suma y resta) → decimal.** El resultado es una cantidad, así que se lee mejor en decimal. Se usan los dos dígitos de la derecha y los de la izquierda quedan apagados.
 
-**Lógicas (AND, OR, XOR, XNOR, NOT, NAND) → binario.** Las operaciones lógicas actúan bit a bit. Como el resultado tiene 4 bits y el display 4 dígitos, cada dígito muestra un bit y la operación se puede comprobar directamente.
 
-En las tablas, `·` representa un dígito apagado.
+### 3.3 Conexión entre módulos
 
-| Operación | A | B | Resultado | Display |
-| --- | :---: | :---: | :---: | :---: |
-| Suma | 7 | 5 | 12 | `··12` |
-| Suma (desborde) | 12 | 9 | 21 → 5 | `···5` |
-| Resta | 9 | 4 | 5 | `···5` |
-| Resta (negativa) | 4 | 6 | −2 → 14 | `··14` |
-| AND | `1100` | `1010` | `1000` | `1000` |
-| OR | `1100` | `1010` | `1110` | `1110` |
-| XOR | `1100` | `1010` | `0110` | `0110` |
-| XNOR | `1100` | `1010` | `1001` | `1001` |
-| NOT | `1100` | — | `0011` | `0011` |
-| NAND | `1100` | `1010` | `0111` | `0111` |
+Los botones de la tarjeta no se conectan directo a la lógica. Cada uno pasa primero por su módulo `antirrebote`, que entrega una señal `pulso[i]` de un ciclo de reloj, y estos cuatro pulsos controlan el resto del sistema. Los switches, en cambio, llegan sin pasar por ningún filtro (no es necesario) al banco de registros como dato de escritura, y a la ALU y a `reg_resultado` como código de operación.
 
-Con `A = 1100` y `B = 1010` aparecen las cuatro combinaciones de bits (1-1, 1-0, 0-1, 0-0), por lo que cada resultado corresponde a la tabla de verdad completa de la operación.
+La escritura del banco depende de dos pulsos. Con el pulso de BTN0, `sel_escritura` cambia la dirección `addr_w`, que le indica al banco cuál registro escribir y a `rgb_registro` qué color mostrar. Con el pulso de BTN1, el banco guarda el valor de SW[3:0] en esa dirección.
 
-### 4.2 Comunicación con el TM1637
+La lectura del banco la controla `comb_selector`, que entrega las direcciones `addr_a` y `addr_b` y las cambia con el pulso de BTN2. El banco usa estas direcciones para colocar en `dato_a` y `dato_b` el contenido de los registros  y `leds_operandos` las usa para encender los LEDs de esa pareja.
 
-El TM1637 se controla con dos líneas:
+La ALU recibe `dato_a`, `dato_b` y el código de SW[2:0], y calcula `alu_result` de forma continua, pero este valor no llega directo al display , porque con el pulso de BTN3 `reg_resultado` copia el resultado y el código de la operación en `res_guardado` y `op_guardada`, que son los valores que recibe `display_tm1637`. Este registro intermedio, permite que el display no se altera cuando cambian los operandos o los switches después de una ejecución.
 
-- **`CLK`**: la maneja solo la FPGA e indica cuándo leer.
-- **`DIO`**: lleva los datos. Es de drenador abierto: la FPGA solo la pone en 0 o la suelta, y la resistencia de pull-up la lleva a 1. Así, el TM1637 también puede bajarla para responder.
+Por último, `display_tm1637` genera las señales `tm_clk` y `tm_dio`, que salen por un puerto Pmod de la tarjeta hacia el módulo del display.
 
-`DIO` solo cambia mientras `CLK` está en 0, y el TM1637 lee un bit en cada flanco de subida de `CLK`, empezando por el bit menos significativo. Los únicos cambios de `DIO` con `CLK` en 1 son las condiciones de control:
+La siguiente tabla resume las señales internas declaradas en `top.v`, con el módulo que genera cada una y los módulos que la reciben.
 
-- **START:** `DIO` baja con `CLK` en 1.
-- **STOP:** `DIO` sube con `CLK` en 1.
+| Señal | Bits | Sale de | Llega a |
+|---|---|---|---|
+| `pulso[3:0]` | 4 | `antirrebote` | `sel_escritura`, `reg_bank`, `comb_selector`, `reg_resultado` |
+| `addr_w` | 2 | `sel_escritura` | `reg_bank`, `rgb_registro` |
+| `addr_a`, `addr_b` | 2 cada una | `comb_selector` | `reg_bank`, `leds_operandos` |
+| `dato_a`, `dato_b` | 4 cada una | `reg_bank` | `alu` |
+| `alu_result` | 4 | `alu` | `reg_resultado` |
+| `res_guardado` | 4 | `reg_resultado` | `display_tm1637` |
+| `op_guardada` | 3 | `reg_resultado` | `display_tm1637` |
 
-Después de cada byte hay un noveno pulso de `CLK` (**ACK**), en el que el TM1637 baja `DIO` para confirmar la recepción.
 
-El driver envía continuamente una trama de tres etapas:
+El archivo `top.v` no contiene lógica propia. Simplemente se usa para declarar las señales internas, instanciar los módulos y conectar sus puertos con los switches, los botones, los LEDs y el puerto Pmod.
 
-| Etapa | Bytes | Significado |
-| :---: | --- | --- |
-| 1 | `0x40` | Modo escritura con dirección automática. |
-| 2 | `0xC0` + 4 dígitos | Empieza en el dígito 0 y envía los segmentos de los 4 dígitos. |
-| 3 | `0x8A` | Enciende el display con brillo 2 de 7. |
+El módulo tiene dos parámetros, `DEBOUNCE` y `TM_DIV`, que fijan el tiempo del antirrebote y la velocidad del bus del display. En la placa valen 1 250 000 y 625 ciclos de reloj, que equivalen a 10 ms y 5 µs a 125 MHz. En la simulación se reducen para que las pruebas terminen en poco tiempo, sin modificar el código de los módulos.
 
-Los dígitos no viajan como números, sino como el patrón de segmentos que se enciende. Por ejemplo, el `1` se envía como `0x06` (segmentos b y c).
+## 4. Diseño de los módulos
 
-Al inicio de cada trama, el driver copia los dígitos en un buffer, por lo que una trama nunca mezcla dígitos de dos resultados. Con `TM_DIV = 625`, cada fase del bus dura 5 µs y la frecuencia de `CLK` es de 50 kHz.
+Para describir el funcionamiento interno de cada módulo, se va a realizar el recorrido desde las señales desde los botones hasta los indicadores.
 
----
+### 4.1 Antirrebote
+
+Al presionar o soltar un pulsador, el contacto mecánico rebota durante algunos milisegundos y la señal oscila varias veces entre 0 y 1 antes de quedarse estable. Si esa señal llegara directo a la lógica, una sola pulsación podría contarse como varias (entonces no hay certeza sobre si el estado es alto o bajo), por lo que cada botón pasa por el módulo `antirrebote` antes de usarse.
+
+El módulo trabaja en tres etapas. La primera es un sincronizador de dos flip-flops (`sync0` y `sync1`), porque el botón cambia en cualquier momento sin relación con el reloj de la FPGA, y una señal así puede dejar a un flip-flop en un estado indefinido durante un instante. La segunda etapa es un filtro que compara la entrada sincronizada con el último estado aceptado (`estable`) y cuenta los ciclos en que son diferentes, de modo que el cambio se acepta cuando se mantiene durante `LIMITE` ciclos seguidos y la cuenta vuelve a cero si un rebote devuelve la señal a su valor anterior. La tercera etapa genera la salida `pulso`, que vale 1 durante un ciclo de reloj cuando se acepta una pulsación y no se activa al soltar el botón.
+
+Con `LIMITE` igual a 1 250 000 y un reloj de 125 MHz, el cambio debe mantenerse 10 ms para ser aceptado, que es cuando esas oscilaciones descritas anteriormente terminan. El siguiente fragmento corresponde al filtro y a la generación del pulso.
+
+```verilog
+// Filtro: el cambio debe durar LIMITE ciclos
+if (sync1 == estable) begin
+    contador <= 21'd0;
+end else begin
+    contador <= contador + 1'b1;
+    if (contador == LIMITE - 1) begin
+        estable  <= sync1;
+        contador <= 21'd0;
+        if (sync1 == 1'b1)    // solo al presionar
+            pulso <= 1'b1;
+    end
+end
+```
+
+### 4.2 Banco de registros y selección de escritura
+
+El módulo `reg_bank` contiene cuatro registros de 4 bits, de R0 a R3, que valen cero al encender la tarjeta. Cada vez que llega el pulso de BTN1, el banco toma el valor de los switches y lo guarda en el registro seleccionado por `addr_w`, sin modificar los otros tres. Esta escritura es síncrona porque ocurre en el flanco de subida del reloj, como se observa en el siguiente fragmento.
+
+```verilog
+always @(posedge clk) begin
+    if (write_enable) begin
+        case (addr_w)
+            2'd0: r0 <= data_w;
+            2'd1: r1 <= data_w;
+            2'd2: r2 <= data_w;
+            2'd3: r3 <= data_w;
+        endcase
+    end
+end
+```
+
+La lectura se realiza por dos puertos, uno para el operando A y otro para el B. Cada puerto es un multiplexor combinacional que entrega el contenido del registro indicado por `addr_a` o `addr_b`, de manera que los dos operandos están disponibles en todo momento y cambian apenas se selecciona una nueva pareja (no es necesario esperar un flanco de reloj).
+
+La dirección de escritura la proporciona `sel_escritura`, un contador de 2 bits que aumenta con cada pulso de BTN0. Como 2 bits representan los valores de 0 a 3, después de R3 el contador se desborda y regresa a R0.
+
+### 4.3 Selector de combinaciones
+
+Con cuatro registros existen seis parejas distintas si no se repite un registro ni se tiene en cuenta el orden. El módulo `comb_selector` recorre estas parejas por medio de un contador (`indice`), que avanza con cada pulso de BTN2 y regresa a 0 después de llegar a 5, y de un bloque combinacional que traduce el índice en las direcciones de los dos registros según la siguiente tabla.
+
+| `indice` | `addr_a` | `addr_b` | Pareja |
+|---|---|---|---|
+| 0 | 0 | 1 | R0, R1 |
+| 1 | 0 | 2 | R0, R2 |
+| 2 | 0 | 3 | R0, R3 |
+| 3 | 1 | 2 | R1, R2 |
+| 4 | 1 | 3 | R1, R3 |
+| 5 | 2 | 3 | R2, R3 |
+
+Como el índice tiene 3 bits puede tomar los valores 6 y 7, pero el contador nunca los alcanza, entonces se incluye una opción `default` que asigna la primera pareja, con lo que todas las salidas quedan definidas y no infieren latches (elementos de memoria no deseados).
+
+### 4.4 Unidad aritmético-lógica
+
+La ALU es un circuito combinacional descrito con un bloque `always @(*)` y una sentencia `case` que elige la operación según el código `op`, como se observa en el siguiente fragmento. Las ocho operaciones y sus códigos son aquellos de la sección 2.4.
+
+```verilog
+always @(*) begin
+    case (op)
+        3'b000:  result = A + B;      // suma
+        3'b001:  result = A - B;      // resta
+        3'b010:  result = A & B;      // AND
+        3'b011:  result = A | B;      // OR
+        3'b100:  result = A ^ B;      // XOR
+        3'b101:  result = ~(A ^ B);   // XNOR
+        3'b110:  result = ~A;         // negador (solo usa A)
+        3'b111:  result = ~(A & B);   // NAND
+        default: result = 4'b0000;    // evita latches
+    endcase
+end
+```
+
+Las operaciones lógicas se aplican bit a bit, por lo tanto, cada bit del resultado depende de los bits de A y B que estén en la misma posición. En las operaciones aritméticas el resultado también tiene 4 bits y solo puede representar valores de 0 a 15, por lo que, cuando una suma supera ese rango o una resta da un valor negativo, el resultado da la vuelta y continúa desde el otro extremo. Por ejemplo, 9 + 9 da 2 en lugar de 18 y 3 − 5 da 14 en lugar de −2, este comportamiento se analiza en la sección 8.
+
+### 4.5 Registro del resultado
+
+El módulo `reg_resultado` es el que permite que el display conserve el último resultado. Contiene dos registros, `result` de 4 bits y `op` de 3 bits, que copian la salida de la ALU y el código de operación en el ciclo en que llega el pulso de BTN3 y además mantiene su valor mientras ese pulso no se repita, aunque cambien los operandos o los switches. Descrito de la siguiente manera:
+```verilog
+always @(posedge clk) begin
+    if (ejecutar) begin
+        result <= result_in;
+        op     <= op_in;
+    end
+end
+```
+
+Guardar la operación junto con el resultado fue necesario porque el formato del display depende del tipo de operación. En el caso donde el display tomara el código directo de SW[2:0], al mover los switches después de una ejecución cambiaría la forma de presentar el número aunque el valor fuera el mismo.
+
+Ambos registros inician en cero, es decir, a una suma con resultado 0, por lo que al encender la tarjeta el display muestra `   0`.
+
+### 4.6 Display TM1637
+
+El módulo `display_tm1637` agrupa dos submódulos.
+
+El módulo `display_tm1637` agrupa dos submódulos. El primero, `formato_display`, es combinacional y convierte la operación y el resultado guardados en los cuatro bytes que indican qué segmentos se encienden en cada dígito, mientras que el segundo, `tm1637_driver`, envía esos bytes al TM1637 por medio de una máquina de estados que genera las dos señales del bus en serie, el reloj `tm_clk` y la línea de datos `tm_dio`. La forma de representar los números y el funcionamiento de la comunicación con el TM1637 se explican en la sección 5.
+
+### 4.7 Indicadores
+
+El módulo `leds_operandos` enciende los LEDs de los registros que forman la pareja activa. Para hacerlo convierte cada dirección en una máscara de 4 bits con un único 1, desplazando el valor `0001` tantas posiciones como indique la dirección, y combina las dos máscaras con una operación OR, como se muestra en el siguiente fragmento.
+
+```verilog
+wire [3:0] mascara_a = 4'b0001 << addr_a;
+wire [3:0] mascara_b = 4'b0001 << addr_b;
+
+assign led = mascara_a | mascara_b;
+```
+
+Para la pareja R1, R3, por ejemplo, las máscaras son `0010` y `1000`, y su combinación `1010` enciende LD1 y LD3.
+
+El módulo `rgb_registro` asigna un color a cada registro de escritura por medio de un bloque combinacional que activa los canales rojo, verde y azul del LED RGB según la siguiente tabla. El amarillo se obtiene al encender al mismo tiempo los canales rojo y verde.
+
+| `addr_w` | Registro | Color | R | G | B |
+|---|---|---|---|---|---|
+| 0 | R0 | Rojo | 1 | 0 | 0 |
+| 1 | R1 | Verde | 0 | 1 | 0 |
+| 2 | R2 | Azul | 0 | 0 | 1 |
+| 3 | R3 | Amarillo | 1 | 1 | 0 |
+
+
+
+
+--------------------------------
 
 ## 5. Simulación
 
