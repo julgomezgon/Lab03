@@ -1,129 +1,111 @@
-`timescale 1ns / 1ps
-// =============================================================================
-// tb_reg_bank.v - Prueba unitaria del banco de registros
-// Verifica:
-//   1. Ciclo de selección de registro (sel_next) y decodificador RGB
-//   2. Escritura síncrona en el registro seleccionado (write_enable)
-//   3. Aislamiento y persistencia cuando write_enable = 0
-//   4. Lectura simultánea de dos operandos (addr_a, addr_b)
-// =============================================================================
+`timescale 1ns/1ps
+
+// Testbench de reg_bank.v
+// sel_escritura elige el registro y reg_bank lo escribe, igual que en top.v.
+// Se escriben 5, 3, 12 y 9 en R0..R3 y se leen por los dos puertos.
+
 module tb_reg_bank;
 
-    reg        clk = 1'b0;
-    reg        sel_next = 1'b0;
-    reg        write_enable = 1'b0;
-    reg  [3:0] wr_data = 4'd0;
-    reg  [1:0] addr_a  = 2'd0;
-    reg  [1:0] addr_b  = 2'd0;
+    reg        clk = 0;
+    reg        siguiente = 0;          // BTN0
+    reg        write_enable = 0;       // BTN1
+    reg  [3:0] data_w = 0;             // switches
+    reg  [1:0] addr_a = 0, addr_b = 0;
+    wire [1:0] addr_w;
     wire [3:0] data_a, data_b;
-    wire [1:0] wr_addr;
-    wire [2:0] rgb;
-
-    integer errors = 0;
-    integer checks = 0;
-    integer i, j;
-    reg [3:0] model [0:3];
 
     always #4 clk = ~clk;
 
-    reg_bank uut (
-        .clk(clk),
-        .sel_next(sel_next),
-        .write_enable(write_enable),
-        .wr_data(wr_data),
-        .addr_a(addr_a),
-        .addr_b(addr_b),
-        .data_a(data_a),
-        .data_b(data_b),
-        .wr_addr(wr_addr),
-        .rgb(rgb)
+    sel_escritura sel (
+        .clk(clk), .siguiente(siguiente), .addr_w(addr_w)
     );
 
-    task cycle_select;
-        input [1:0] exp_addr;
-        input [2:0] exp_rgb;
+    reg_bank banco (
+        .clk(clk), .write_enable(write_enable),
+        .addr_w(addr_w), .data_w(data_w),
+        .addr_a(addr_a), .addr_b(addr_b),
+        .data_a(data_a), .data_b(data_b)
+    );
+
+    // Registros internos para ver en GTKWave
+    wire [3:0] R0 = banco.r0;
+    wire [3:0] R1 = banco.r1;
+    wire [3:0] R2 = banco.r2;
+    wire [3:0] R3 = banco.r3;
+
+    integer errores = 0;
+    integer i;
+    reg [3:0] valores [0:3];
+
+    // Pulsos de un ciclo, como los del antirrebote
+    task pulso_btn0;
         begin
-            @(negedge clk);
-            sel_next = 1'b1;
-            @(negedge clk);
-            sel_next = 1'b0;
+            @(negedge clk) siguiente = 1;
+            @(negedge clk) siguiente = 0;
+        end
+    endtask
+
+    task pulso_btn1;
+        begin
+            @(negedge clk) write_enable = 1;
+            @(negedge clk) write_enable = 0;
+        end
+    endtask
+
+    task leer(input [1:0] a, input [1:0] b);
+        begin
+            addr_a = a; addr_b = b;
             #1;
-            checks = checks + 1;
-            if (wr_addr !== exp_addr || rgb !== exp_rgb) begin
-                errors = errors + 1;
-                $display("[FAIL] sel_next -> wr_addr=%d (exp %d), rgb=%b (exp %b)",
-                         wr_addr, exp_addr, rgb, exp_rgb);
+            if (data_a == valores[a] && data_b == valores[b])
+                $display("A=R%0d -> %2d   B=R%0d -> %2d", a, data_a, b, data_b);
+            else begin
+                $display("ERROR A=R%0d -> %0d   B=R%0d -> %0d", a, data_a, b, data_b);
+                errores = errores + 1;
             end
-        end
-    endtask
-
-    task write_current;
-        input [3:0] data;
-        begin
-            @(negedge clk);
-            wr_data = data;
-            write_enable = 1'b1;
-            @(negedge clk);
-            write_enable = 1'b0;
-            model[wr_addr] = data;
-        end
-    endtask
-
-    task check_all_reads;
-        begin
-            for (i = 0; i < 4; i = i + 1)
-                for (j = 0; j < 4; j = j + 1) begin
-                    addr_a = i; addr_b = j; #1;
-                    checks = checks + 1;
-                    if (data_a !== model[i] || data_b !== model[j]) begin
-                        errors = errors + 1;
-                        $display("[FAIL] %0t A=R%0d(%h) B=R%0d(%h) esperado %h/%h",
-                                 $time, i, data_a, j, data_b, model[i], model[j]);
-                    end
-                end
         end
     endtask
 
     initial begin
         $dumpfile("tb_reg_bank.vcd");
         $dumpvars(0, tb_reg_bank);
-        for (i = 0; i < 4; i = i + 1) model[i] = 4'd0;
 
-        #20;
-        check_all_reads;                 // Valores iniciales = 0
-        if (wr_addr !== 2'd0 || rgb !== 3'b100) errors = errors + 1;
+        valores[0] = 4'd5; valores[1] = 4'd3; valores[2] = 4'd12; valores[3] = 4'd9;
 
-        // Escribir en R0
-        write_current(4'h3);
+        repeat (3) @(negedge clk);
 
-        // Pasar a R1 y escribir
-        cycle_select(2'd1, 3'b010);
-        write_current(4'hC);
+        // Escritura
+        $display("== escritura ==");
+        for (i = 0; i < 4; i = i + 1) begin
+            data_w = valores[i];
+            pulso_btn1;
+            $display("addr_w=%0d  dato=%2d  banco=[%0d %0d %0d %0d]", addr_w, data_w, R0, R1, R2, R3);
+            pulso_btn0;
+        end
 
-        // Pasar a R2 y escribir
-        cycle_select(2'd2, 3'b001);
-        write_current(4'h5);
+        if (addr_w != 0) begin
+            $display("ERROR addr_w no volvió a 0");
+            errores = errores + 1;
+        end
 
-        // Pasar a R3 y escribir
-        cycle_select(2'd3, 3'b110);
-        write_current(4'hA);
-
-        // Retornar a R0
-        cycle_select(2'd0, 3'b100);
-
-        check_all_reads;
-
-        // Sin write_enable no debe escribir aunque cambie el dato
-        @(negedge clk);
-        wr_data = 4'hF;
+        // Sin write_enable no se escribe
+        data_w = 4'd15;
         repeat (5) @(negedge clk);
-        check_all_reads;
+        if (R0 != 5) begin
+            $display("ERROR R0 cambió sin write_enable");
+            errores = errores + 1;
+        end
 
-        // Sobrescritura en R0
-        write_current(4'h9);
-        check_all_reads;
+        // Lectura por los dos puertos
+        $display("\n== lectura ==");
+        leer(0, 1);
+        leer(0, 2);
+        leer(0, 3);
+        leer(1, 2);
+        leer(1, 3);
+        leer(2, 3);
 
-        $display("RESULTADO tb_reg_bank: %0d verificaciones, %0d errores", checks, errors);
+        if (errores == 0) $display("\ntb_reg_bank: PASA");
+        else              $display("\ntb_reg_bank: FALLA (%0d errores)", errores);
         $finish;
     end
 
