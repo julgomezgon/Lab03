@@ -274,106 +274,118 @@ El módulo `rgb_registro` asigna un color a cada registro de escritura por medio
 
 ### 5.1 Testbench por módulo
 
-| Testbench | Módulo | Qué se verifica |
+Cada módulo se verificó con un testbench propio antes de integrarlo al sistema. La siguiente tabla relaciona cada testbench con el módulo que prueba y con los casos que revisa.
+
+| Testbench | Módulo | Casos verificados |
 | --- | --- | --- |
-| `tb_alu.v` | `alu` | Las 8 operaciones, el desborde de la suma, la resta con resultado negativo y que NOT ignore `B`. |
-| `tb_reg_bank.v` | `reg_bank`, `sel_escritura` | Escritura de R0–R3, que sin `write_enable` no se escriba, la vuelta de `addr_w` a 0 y la lectura de las 6 parejas por los dos puertos. |
-| `tb_comb_selector.v` | `comb_selector` | Las 6 parejas en orden, la vuelta a R0-R1 y que sin pulso no cambie. |
-| `tb_almacenamiento.v` | `antirrebote`, `reg_resultado` | Que el ruido corto no genere pulsos, que una pulsación con rebotes genere exactamente uno y que el registro solo cambie con `ejecutar`. |
-| `tb_indicadores.v` | `leds_operandos`, `rgb_registro` | LEDs de las 6 parejas y color de cada registro. |
-| `tb_tm1637_trama.v` | `display_tm1637` | Trama completa del bus. Incluye un modelo del TM1637 que detecta START y STOP, lee los bits, responde el ACK y reconstruye el texto del display. |
+| `tb_alu.v` | `alu` | Las ocho operaciones, el desbordamiento de la suma, la resta con resultado negativo y que la operación NOT no dependa de `B` |
+| `tb_reg_bank.v` | `reg_bank`, `sel_escritura` | La escritura de R0 a R3, que ningún registro cambie sin `write_enable`, el regreso de `addr_w` a 0 y la lectura de las seis parejas por los dos puertos |
+| `tb_comb_selector.v` | `comb_selector` | Las seis parejas en orden, el regreso a R0-R1 y que la pareja no cambie sin pulso |
+| `tb_almacenamiento.v` | `antirrebote`, `reg_resultado` | Que el ruido corto no genere pulsos, que una pulsación con rebotes genere un solo pulso y que el registro del resultado no cambie sin el pulso de `ejecutar` |
+| `tb_indicadores.v` | `leds_operandos`, `rgb_registro` | Los LEDs encendidos para cada una de las seis parejas y el color del LED RGB para cada registro |
+| `tb_tm1637_trama.v` | `display_tm1637` | La trama completa del bus, con un modelo del TM1637 que detecta START y STOP, lee los bits, responde el ACK y reconstruye el texto del display |
 
 ### 5.2 Testbench del sistema completo
 
-`tb_top.v` instancia `top.v` y sigue la misma secuencia que se haría en la placa. El texto del display se obtiene de los segmentos que genera `formato_display`. Los botones se simulan sin rebotes, ya que el antirrebote se prueba por separado en `tb_almacenamiento.v`.
+El testbench `tb_top.v` instancia `top.v` y reproduce la secuencia de pasos que se haría en la placa. El texto del display se reconstruye a partir de los segmentos que genera `formato_display`, y los botones se simulan sin rebotes, ya que el antirrebote se prueba por separado en `tb_almacenamiento.v`. La siguiente tabla describe los pasos de la prueba y el resultado esperado en cada uno.
 
-| Paso | Qué hace | Resultado esperado |
+| Paso | Acción | Resultado esperado |
 | --- | --- | --- |
-| 1. Escritura | Carga 5, 3, 12 y 9 en R0–R3 con `BTN1` y `BTN0`. | Banco = `[5 3 12 9]`. |
-| 2. Pareja R0, R1 | Ejecuta suma y AND con `BTN3`. | `8` → `   8` y `0001` → `0001`. |
-| 3. Pareja R0, R2 | Avanza con `BTN2` y ejecuta XOR. | `1001` → `1001`. |
-| 4. Conservación | Cambia los switches y pasa a la pareja R0, R3 **sin** presionar `BTN3`. | El resultado y el display siguen en `1001`. |
-| 5. Pareja R0, R3 | Ejecuta suma y resta. | `14` → `  14` y `12` → `  12` (5 − 9 = −4, en módulo 16). |
+| 1. Escritura | Carga 5, 3, 12 y 9 en R0 a R3 con `BTN1` y `BTN0` | Banco con los valores `[5 3 12 9]` |
+| 2. Pareja R0, R1 | Ejecuta la suma y la AND con `BTN3` | `8` → `   8`, y `0001` → `0001` |
+| 3. Pareja R0, R2 | Avanza con `BTN2` y ejecuta la XOR | `1001` → `1001` |
+| 4. Conservación | Cambia los switches y pasa a la pareja R0, R3 sin presionar `BTN3` | El resultado y el display siguen en `1001` |
+| 5. Pareja R0, R3 | Ejecuta la suma y la resta | `14` → `  14`, y `12` → `  12`, porque la resta 5 − 9 da la vuelta y resulta en 12 |
 
 ### 5.3 Formas de onda
 
+En esta sección se presentan las capturas de GTKWave de cada testbench, con las señales que se muestran y lo que se observa en cada tramo de la simulación.
+
 #### ALU (`tb_alu.v`)
+
+La siguiente captura muestra las señales `op`, `A`, `B` y `esperado` en binario, con una prueba cada 10 ns que recorre las ocho operaciones.
 
 ![Simulación de la ALU](sim/GTKWave_Images/tb_alu.png)
 
-Señales: `op`, `A`, `B` y `esperado`, en binario. Cada prueba dura 10 ns y se aplican las 8 operaciones.
+Entre 0 y 40 ns se prueban la suma y la resta. Con `A = 0101` y `B = 0011` la suma da `1000` (8) y la resta `0010` (2), y luego se prueban los límites de 4 bits, donde `1111 + 1111` da `1110` (14) porque se pierde el acarreo del resultado 30, y `0011 - 0101` da `1110` (14, o E en hexadecimal), que es la forma en que el resultado −2 da la vuelta con 4 bits.
 
-- **0–40 ns, suma y resta:** `0101 + 0011 = 1000` (8) y `0101 - 0011 = 0010` (2). Además se prueban los límites de 4 bits: `1111 + 1111` da `1110` (14), porque se pierde el acarreo de 30, y `0011 - 0101` da `1110` (14 o  E), que es −2 en módulo 16.
-- **40–110 ns, operaciones lógicas:** con `A = 1100` y `B = 1010` aparecen las cuatro combinaciones de bits, así que cada resultado corresponde a la tabla de verdad completa: AND `1000`, OR `1110`, XOR `0110`, XNOR `1001` y NAND `0111`.
-- **80–100 ns, NOT:** se ejecuta dos veces con el mismo `A` y distinto `B` (`1010` y `0000`), y en ambos casos el resultado es `0011`. Esto confirma que el negador solo usa `A`.
+Entre 40 y 110 ns se prueban las operaciones lógicas con `A = 1100` y `B = 1010`. Estos valores contienen las cuatro combinaciones posibles de dos bits, por lo que cada resultado reproduce la tabla de verdad completa de su operación, y se obtiene `1000` para AND, `1110` para OR, `0110` para XOR, `1001` para XNOR y `0111` para NAND.
+
+Entre 80 y 100 ns la operación NOT se ejecuta dos veces con el mismo `A` y con valores distintos de `B` (`1010` y `0000`), y en ambos casos el resultado es `0011`, lo que confirma que el negador no depende de `B`.
 
 En todos los tramos `esperado` cambia en el mismo instante que las entradas, porque la ALU es combinacional.
 
 #### Banco de registros (`tb_reg_bank.v`)
 
+La captura del banco de registros muestra `clk`, `write_enable`, `siguiente`, `addr_w`, `data_w`, los registros R0 a R3, `addr_a`, `addr_b`, `data_a` y `data_b`, con los valores en decimal.
+
 ![Simulación del banco de registros](sim/GTKWave_Images/tb_reg_bank.png)
 
-Señales: `clk`, `write_enable`, `siguiente`, `addr_w`, `data_w`, `R0`–`R3`, `addr_a`, `addr_b`, `data_a` y `data_b`, en decimal.
+Entre 20 y 150 ns se repite cuatro veces la secuencia de un pulso de `write_enable` seguido de un pulso de `siguiente`. En cada flanco de subida de `clk` con `write_enable` en 1 cambia el registro indicado por `addr_w`, de modo que R0 toma 5, R1 toma 3, R2 toma 12 y R3 toma 9, mientras que con cada pulso de `siguiente` la dirección `addr_w` avanza y después de R3 regresa a 0.
 
-- **Escritura (20–150 ns):** se repite cuatro veces la secuencia pulso de `write_enable` → pulso de `siguiente`. En el flanco de subida de `clk` en que `write_enable` está en 1, solo cambia el registro que indica `addr_w`: R0 toma 5, R1 toma 3, R2 toma 12 y R3 toma 9. Con cada pulso de `siguiente`, `addr_w` avanza, y después de R3 vuelve a 0.
-- **Sin escritura (150–190 ns):** `data_w` pasa a 15, pero como `write_enable` sigue en 0, ningún registro cambia.
-- **Lectura (190–250 ns):** `addr_a` y `addr_b` recorren las 6 parejas. `data_a` y `data_b` muestran de inmediato el valor del registro correspondiente, porque la lectura es combinacional; por ejemplo, con `addr_a = 0` y `addr_b = 2` se leen 5 y 12.
+Entre 150 y 190 ns `data_w` pasa a 15, pero ningún registro cambia porque `write_enable` permanece en 0.
+
+Entre 190 y 250 ns `addr_a` y `addr_b` recorren las seis parejas, y `data_a` y `data_b` muestran el valor del registro correspondiente en el mismo instante en que cambian las direcciones, porque la lectura es combinacional. Con `addr_a` en 0 y `addr_b` en 2, por ejemplo, se leen 5 y 12.
 
 #### Selector de combinaciones (`tb_comb_selector.v`)
 
+En la captura del selector de combinaciones aparecen `clk`, `siguiente`, `indice`, `addr_a` y `addr_b`, en decimal.
+
 ![Simulación del selector de combinaciones](sim/GTKWave_Images/tb_comb_selector.png)
 
-Señales: `clk`, `siguiente`, `indice`, `addr_a` y `addr_b`, en decimal.
-
-Cada pulso de `siguiente` hace avanzar `indice` en el siguiente flanco de subida de `clk`, y en ese mismo instante `addr_a` y `addr_b` cambian a la nueva pareja: (0, 1), (0, 2), (0, 3), (1, 2), (1, 3) y (2, 3). Con el sexto pulso, `indice` pasa de 5 a 0 y la pareja vuelve a (0, 1). En el tramo final no hay pulsos y el índice se mantiene.
+Cada pulso de `siguiente` hace avanzar `indice` en el siguiente flanco de subida de `clk`, y en ese mismo instante `addr_a` y `addr_b` cambian a la nueva pareja, recorriendo (0, 1), (0, 2), (0, 3), (1, 2), (1, 3) y (2, 3). Con el sexto pulso `indice` pasa de 5 a 0 y la pareja vuelve a (0, 1), y en el tramo final, donde no hay pulsos, el índice se mantiene.
 
 #### Antirrebote (`tb_almacenamiento.v`)
 
+La captura del antirrebote muestra `btn`, `ar.estable`, `ar.contador` en decimal y `pulso`, en el tramo de 0 a 1110 ns.
+
 ![Simulación del antirrebote](sim/GTKWave_Images/tb_antirrebote.png)
 
-Señales: `btn`, `ar.estable`, `ar.contador` (decimal) y `pulso`. Se muestra el tramo de 0 a 1110 ns.
+Cerca de los 40 ns `btn` sube durante 3 ciclos, lo que representa un ruido corto. El contador empieza a contar, pero se reinicia en cuanto `btn` vuelve a 0, y `pulso` no se activa.
 
-- **Ruido corto (~40 ns):** `btn` sube solo 3 ciclos. `contador` empieza a contar, pero se reinicia en cuanto `btn` vuelve a 0, y `pulso` no se activa.
-- **Pulsación con rebotes (~250–730 ns):** `btn` sube y baja varias veces antes de quedarse en 1. Cada rebote reinicia `contador`; solo cuando `btn` se mantiene estable durante 8 ciclos, `estable` pasa a 1 y `pulso` genera **un único pulso** de un ciclo. Al soltar también hay rebotes, y cuando `estable` vuelve a 0 no se genera ningún pulso.
-- **Segunda pulsación (~720–1110 ns):** una pulsación limpia genera un segundo pulso, lo que confirma que el filtro queda listo después de soltar.
+Entre 250 y 730 ns aproximadamente se simula una pulsación con rebotes, en la que `btn` sube y baja varias veces antes de quedarse en 1. Cada rebote reinicia `contador`, y cuando `btn` se mantiene estable durante 8 ciclos, `estable` pasa a 1 y `pulso` genera un pulso de un ciclo. Al soltar el botón también hay rebotes, pero cuando `estable` vuelve a 0 no se genera ningún pulso.
+
+Entre 720 y 1110 ns una pulsación sin rebotes genera un segundo pulso, lo que confirma que el filtro queda listo después de soltar el botón.
 
 #### Registro del resultado (`tb_almacenamiento.v`)
 
+La captura del registro del resultado muestra `clk`, `ejecutar`, `result_in`, `op_in`, `result` y `op`, en decimal y binario, en el tramo final de la simulación, desde cerca de 1100 ns.
+
 ![Simulación del registro del resultado](sim/GTKWave_Images/tb_reg_resultado.png)
 
-Señales: `clk`, `ejecutar`, `result_in`, `op_in`, `result` y `op`, en decimal y binario. Se muestra el tramo final de la simulación, desde ~1100 ns.
-
-`result_in` pasa a 9 y, mientras `ejecutar` está en 0, `result` sigue en 0. Con el primer pulso de `ejecutar`, `result` toma 9 y `op` toma `000`. Luego `result_in` cambia a 5 y `op_in` a `011`, pero `result` y `op` **se mantienen** en 9 y `000` hasta el segundo pulso de `ejecutar`, cuando pasan a 5 y `011`. Este es el mecanismo que conserva el resultado del display hasta presionar `BTN3`.
+Cuando `result_in` pasa a 9, `result` sigue en 0 mientras `ejecutar` permanece en 0. Con el primer pulso de `ejecutar`, `result` toma el valor 9 y `op` el código `000`, y aunque después `result_in` cambia a 5 y `op_in` a `011`, las salidas se mantienen en 9 y `000` hasta el segundo pulso de `ejecutar`, cuando pasan a 5 y `011`. Este es el mecanismo que conserva el resultado en el display hasta que se presiona `BTN3`.
 
 #### LEDs y LED RGB (`tb_indicadores.v`)
 
+La captura de los indicadores muestra `addr_a`, `addr_b`, `led` en binario, `addr_w`, `r`, `g` y `b`, con una prueba cada 10 ns.
+
 ![Simulación de los indicadores](sim/GTKWave_Images/tb_indicadores.png)
 
-Señales: `addr_a`, `addr_b`, `led` (binario), `addr_w`, `r`, `g` y `b`. Cada prueba dura 10 ns.
+Entre 0 y 60 ns se recorren las seis parejas, y en cada una `led` tiene en 1 los bits de los dos registros activos y en 0 los demás, con los valores `0011`, `0101`, `1001`, `0110`, `1010` y `1100`.
 
-- **0–60 ns, LEDs de operandos:** para cada pareja, `led` tiene en 1 exactamente los bits de los dos registros activos: `0011`, `0101`, `1001`, `0110`, `1010` y `1100`.
-- **60–100 ns, LED RGB:** `addr_w` recorre 0 a 3 y `{r, g, b}` toma `100` (rojo), `010` (verde), `001` (azul) y `110` (amarillo). Antes de los 60 ns `addr_w` aún no tiene valor asignado, por eso aparece indefinido.
-
+Entre 60 y 100 ns `addr_w` recorre los valores de 0 a 3 y `{r, g, b}` toma `100` (rojo), `010` (verde), `001` (azul) y `110` (amarillo). Antes de los 60 ns `addr_w` todavía no tiene un valor asignado, por lo que aparece indefinido.
 
 #### Trama del TM1637 (`tb_tm1637_trama.v`)
 
-El TM1637 no recibe el número directamente: recibe una secuencia de bytes por dos líneas, `CLK` y `DIO`. El módulo `tm1637_driver` arma esa secuencia y la repite de forma continua. Para que el display muestre un resultado, cada repetición (trama) tiene que hacer tres cosas en orden: configurar el modo de escritura, enviar los 4 dígitos y encender el display.
+El TM1637 no recibe el resultado como un número, sino como una secuencia de bytes que llega por dos líneas, `CLK` y `DIO`. El módulo `tm1637_driver` arma esa secuencia y la repite de forma continua, y en cada repetición, llamada trama, configura el modo de escritura, envía los cuatro dígitos y enciende el display, en ese orden.
 
-**Estructura de la trama.** Una trama tiene 7 bytes repartidos en 3 etapas. Cada etapa empieza con un START y termina con un STOP:
+**Estructura de la trama**
+
+Cada trama tiene siete bytes repartidos en tres etapas, y cada etapa empieza con un START y termina con un STOP. La siguiente tabla muestra los bytes de una trama y la función de cada uno.
 
 | `n_byte` | Etapa | Byte | Binario | Función |
 | :---: | :---: | :---: | :---: | --- |
-| 0 | 1 | `0x40` | `0100 0000` | **Comando de datos.** Los bits `01` indican que es un comando de datos, el bit 2 en `0` activa la dirección automática y los bits `00` indican escritura en el display. |
-| 1 | 2 | `0xC0` | `1100 0000` | **Comando de dirección.** Los bits `11` indican que es un comando de dirección y `0000` que la escritura empieza en el dígito 0 (el de la izquierda). |
-| 2 | 2 | dígito 0 | segmentos | Segmentos del dígito 0. |
-| 3 | 2 | dígito 1 | segmentos | Segmentos del dígito 1. Por la dirección automática, se guarda en la siguiente posición sin enviar otra dirección. |
-| 4 | 2 | dígito 2 | segmentos | Segmentos del dígito 2. |
-| 5 | 2 | dígito 3 | segmentos | Segmentos del dígito 3. |
-| 6 | 3 | `0x8A` | `1000 1010` | **Control del display.** Los bits `10` indican que es un comando de control, el bit 3 en `1` enciende el display y `010` fija el brillo en el nivel 2 (de 0 a 7). |
+| 0 | 1 | `0x40` | `0100 0000` | Comando de datos, identificado por los bits `01`, con el bit 2 en `0` para activar la dirección automática y los bits `00` para indicar escritura en el display |
+| 1 | 2 | `0xC0` | `1100 0000` | Comando de dirección, identificado por los bits `11`, con `0000` para que la escritura empiece en el dígito 0, el de la izquierda |
+| 2 | 2 | dígito 0 | segmentos | Segmentos del dígito 0 |
+| 3 | 2 | dígito 1 | segmentos | Segmentos del dígito 1, que se guardan en la siguiente posición sin enviar otra dirección gracias a la dirección automática |
+| 4 | 2 | dígito 2 | segmentos | Segmentos del dígito 2 |
+| 5 | 2 | dígito 3 | segmentos | Segmentos del dígito 3 |
+| 6 | 3 | `0x8A` | `1000 1010` | Comando de control, identificado por los bits `10`, con el bit 3 en `1` para encender el display y `010` para fijar el brillo en el nivel 2 de una escala de 0 a 7 |
 
-Por eso en el código el STOP solo va después de los bytes 0, 5 y 6 (`stop_despues`): gracias a la dirección automática, `0xC0` y los 4 dígitos se envían seguidos en una sola etapa.
+Por esta razón, en el código el STOP va después de los bytes 0, 5 y 6, como indica la señal `stop_despues`, ya que la dirección automática permite enviar `0xC0` y los cuatro dígitos seguidos en una sola etapa.
 
-Los dígitos no se envían como números, sino como el patrón de segmentos que se debe encender. Cada bit corresponde a un segmento: bit 0 = a, bit 1 = b, …, bit 6 = g y bit 7 = punto. Los que aparecen en esta simulación son:
+Los dígitos no se envían como números, sino como el patrón de segmentos que se debe encender, donde el bit 0 corresponde al segmento a, el bit 1 al b y así hasta el bit 6, que corresponde al g, mientras que el bit 7 controla el punto. La siguiente tabla muestra los patrones que aparecen en esta simulación.
 
 | Carácter | Byte | Binario | Segmentos encendidos |
 | :---: | :---: | :---: | --- |
@@ -382,46 +394,52 @@ Los dígitos no se envían como números, sino como el patrón de segmentos que 
 | `1` | `0x06` | `0000 0110` | b, c |
 | `2` | `0x5B` | `0101 1011` | a, b, d, e, g |
 
-**Transmisión de un byte.** La máquina de estados del driver tiene 4 estados, y cada uno se divide en 4 fases de igual duración. En la simulación (`DIV = 4`) cada fase dura 32 ns; en la placa (`DIV = 625`) dura 5 µs, lo que da un reloj de 50 kHz en `tm_clk`.
+**Transmisión de un byte**
+
+La máquina de estados del driver tiene cuatro estados, cada uno dividido en cuatro fases de igual duración. En la simulación, con `DIV` igual a 4, cada fase dura 32 ns, mientras que en la placa, con `DIV` igual a 625, dura 5 µs, lo que da un reloj de 50 kHz en `tm_clk`. La siguiente tabla describe lo que ocurre en cada fase.
 
 | Estado (`estado`) | Fase 0 | Fase 1 | Fase 2 | Fase 3 |
 | --- | --- | --- | --- | --- |
 | START (0) | `CLK` = 1, `DIO` libre | `DIO` baja con `CLK` en 1 → **START** | — | Pasa a enviar bits |
-| BIT (1) | `CLK` baja | Se pone el bit en `DIO` | `CLK` sube → **el TM1637 lee el bit** | Siguiente bit, o ACK tras el 8.º |
+| BIT (1) | `CLK` baja | Se pone el bit en `DIO` | `CLK` sube → **el TM1637 lee el bit** | Siguiente bit, o ACK después del 8.º |
 | ACK (2) | `CLK` baja | El driver suelta `DIO` | `CLK` sube → **el TM1637 responde** | STOP, o siguiente byte |
 | STOP (3) | `CLK` baja | `DIO` en 0 | `CLK` sube | `DIO` sube con `CLK` en 1 → **STOP** |
 
-De esta tabla salen las reglas que se deben ver en la simulación:
+De esta tabla se desprenden cuatro características que se deben observar en la simulación.
 
-- **Los datos solo cambian con `CLK` en 0** (fase 1 de BIT) y se leen en el flanco de subida (fase 2). Así, cuando el TM1637 lee, `DIO` ya está estable.
-- **Un cambio de `DIO` con `CLK` en 1 es una señal de control:** si baja es START y si sube es STOP. Como los datos nunca cambian con `CLK` en 1, el TM1637 puede distinguir un bit de un START o un STOP.
-- **Los bits se envían del menos significativo al más significativo** (`dato[n_bit]`, con `n_bit` de 0 a 7). En la onda, cada byte aparece escrito "al revés".
-- **`DIO` es de drenador abierto:** el driver solo la pone en 0 o la suelta (`1'bz`), y la resistencia de pull-up la lleva a 1. Así, en el noveno pulso (ACK), el TM1637 puede bajarla para confirmar que recibió el byte.
+- Los datos cambian mientras `CLK` está en 0, en la fase 1 de BIT, y se leen en el flanco de subida de la fase 2, de modo que `DIO` ya está estable cuando el TM1637 lo lee.
+- Un cambio de `DIO` con `CLK` en 1 es una señal de control, que corresponde a un START si `DIO` baja y a un STOP si sube. Como los datos nunca cambian con `CLK` en 1, el TM1637 puede distinguir un bit de un START o de un STOP.
+- Los bits se envían del menos significativo al más significativo, ya que el driver transmite `dato[n_bit]` con `n_bit` de 0 a 7, por lo que en la onda cada byte aparece escrito al revés.
+- `DIO` es una línea de drenador abierto, así que el driver la pone en 0 o la deja libre (`1'bz`) y la resistencia de pull-up la lleva a 1, lo que permite que en el noveno pulso el TM1637 la baje para confirmar que recibió el byte.
 
-Cada byte usa entonces 9 pulsos de `tm_clk`: 8 de datos y 1 de ACK. Antes de cada STOP hay un pulso adicional que no lleva información y sirve para dejar `DIO` en 0 antes de subirla. Por eso las etapas 1 y 3 tienen 10 pulsos (9 + 1) y la etapa 2 tiene 46 (5 × 9 + 1).
+Cada byte usa nueve pulsos de `tm_clk`, ocho de datos y uno de ACK. Antes de cada STOP hay un pulso adicional que no lleva información y sirve para dejar `DIO` en 0 antes de subirla, por lo que las etapas 1 y 3 tienen 10 pulsos (9 + 1) y la etapa 2 tiene 46 (5 × 9 + 1).
 
 **Vista completa**
 
+La siguiente captura muestra `tm_clk`, `tm_dio`, `estado`, `n_byte` en decimal, `byte_tx` en hexadecimal, `ack` y `texto` en ASCII, durante el envío de dos tramas de unos 8.8 µs cada una.
+
 ![Simulación de la trama del TM1637](sim/GTKWave_Images/tb_tm1637_trama.png)
 
-Señales: `tm_clk`, `tm_dio`, `estado`, `n_byte` (decimal), `byte_tx` (hexadecimal), `ack` y `texto` (ASCII). Se envían dos tramas, cada una de unos 8.8 µs:
+La siguiente tabla resume la entrada del display, los bytes enviados y el texto que reconstruye el modelo en cada trama.
 
 | Trama | Entrada del display | Bytes enviados | `texto` al terminar |
 | :---: | --- | --- | :---: |
 | 1 | `op = 000` (suma), `result = 12` | `40` · `C0 00 00 06 5B` · `8A` | `"  12"` |
 | 2 | `op = 010` (AND), `result = 0101` | `40` · `C0 3F 06 3F 06` · `8A` | `"0101"` |
 
-En cada trama se distinguen tres grupos de pulsos de `tm_clk`: uno corto (etapa 1, ~1.4 µs), uno largo (etapa 2, ~6 µs) y otro corto (etapa 3, ~1.4 µs). Entre grupos, `tm_clk` queda en 1 mientras `tm_dio` marca el STOP de una etapa y el START de la siguiente. `n_byte` avanza de 0 a 6 y `byte_tx` muestra el byte que se transmite en cada momento.
+En cada trama se distinguen tres grupos de pulsos de `tm_clk`, uno corto para la etapa 1 (cerca de 1.4 µs), uno largo para la etapa 2 (cerca de 6 µs) y otro corto para la etapa 3 (cerca de 1.4 µs). Entre un grupo y otro, `tm_clk` queda en 1 mientras `tm_dio` marca el STOP de una etapa y el START de la siguiente, y a lo largo de la trama `n_byte` avanza de 0 a 6 mientras `byte_tx` muestra el byte que se transmite en cada momento.
 
-La suma se muestra en decimal (`12` en los dos dígitos de la derecha y los otros apagados) y la AND en binario (un bit por dígito), según la estrategia de visualización. `texto` solo cambia cuando el modelo recibe `0x8A`, igual que el TM1637 real, que muestra los dígitos al recibir el comando de encendido.
+La suma se muestra en decimal, con `12` en los dos dígitos de la derecha y los otros dos apagados, y la AND en binario, con un bit por dígito. El modelo actualiza `texto` cuando recibe `0x8A`, es decir, cuando la trama ya está completa, para que el valor mostrado corresponda a los cuatro dígitos de una misma trama.
 
-Los dígitos de cada trama no se mezclan aunque `op` y `result` cambien a mitad de una trama: al comenzar cada trama (START con `n_byte = 0`), el driver copia los 4 dígitos en `buf0`–`buf3` y transmite esa copia. Por eso el cambio de entrada al final de la primera trama solo aparece en la segunda.
+Los dígitos de una trama no se mezclan aunque `op` y `result` cambien durante el envío, porque al comenzar cada trama, en el START con `n_byte` igual a 0, el driver copia los cuatro dígitos en `buf0` a `buf3` y transmite esa copia. Por eso el cambio de entrada que ocurre al final de la primera trama se refleja en la segunda.
 
 **Detalle de la etapa 2**
 
+La siguiente captura amplía la etapa 2 de la primera trama, en la que `n_byte` va de 1 a 5, entre 1.4 µs y 7.4 µs aproximadamente.
+
 ![Detalle de la etapa 2 del TM1637](sim/GTKWave_Images/tb_tm1637_etapa2.png)
 
-Etapa 2 de la primera trama (`n_byte` de 1 a 5, aproximadamente de 1.4 µs a 7.4 µs). Empieza con un START: `tm_dio` baja mientras `tm_clk` está en 1. Desde ahí, leyendo `tm_dio` en cada flanco de subida de `tm_clk`, se obtienen los bits de cada byte:
+La etapa empieza con un START, en el que `tm_dio` baja mientras `tm_clk` está en 1, y a partir de ahí los bits de cada byte se obtienen leyendo `tm_dio` en cada flanco de subida de `tm_clk`, como se resume en la siguiente tabla.
 
 | Byte | `tm_dio` en los pulsos 1 → 8 | Leído del bit 7 al 0 | Pulso 9 |
 | :---: | :---: | :---: | :---: |
@@ -431,29 +449,31 @@ Etapa 2 de la primera trama (`n_byte` de 1 a 5, aproximadamente de 1.4 µs a 7.4
 | `06` | `0 1 1 0 0 0 0 0` | `0000 0110` | ACK |
 | `5B` | `1 1 0 1 1 0 1 0` | `0101 1011` | ACK |
 
-En el noveno pulso de cada byte, `ack` está en 1: el modelo del TM1637 baja `tm_dio` para confirmar la recepción, aunque el driver ya la haya soltado. Justo después, cuando `tm_clk` baja, `tm_dio` puede subir un instante por el pull-up antes de que el driver ponga el primer bit del siguiente byte; como ocurre con `tm_clk` en 0, no se interpreta como STOP. Después del quinto ACK, el pulso adicional y la subida de `tm_dio` con `tm_clk` en 1 forman el STOP que cierra la etapa.
+En el noveno pulso de cada byte `ack` está en 1, lo que indica que el modelo del TM1637 baja `tm_dio` para confirmar la recepción después de que el driver la soltó. Cuando `tm_clk` baja, `tm_dio` puede subir un instante por el pull-up antes de que el driver ponga el primer bit del siguiente byte, pero como ese cambio ocurre con `tm_clk` en 0 no se interpreta como un STOP. Después del quinto ACK, el pulso adicional y la subida de `tm_dio` con `tm_clk` en 1 forman el STOP que cierra la etapa.
 
-Entre los 5 bytes no hay START ni STOP: es una sola transmisión continua, posible gracias a la dirección automática configurada con `0x40`.
+Entre los cinco bytes no hay START ni STOP, ya que se envían en una sola transmisión continua gracias a la dirección automática configurada con `0x40`.
 
+#### Sistema completo, escritura (`tb_top.v`)
 
-#### Sistema completo: escritura (`tb_top.v`)
+La captura de la escritura en el sistema completo muestra `btn` y `sw` en binario, `dut.pulso` en binario, `dut.addr_w`, los registros R0 a R3 en decimal y los canales `dut.led6_r`, `dut.led6_g` y `dut.led6_b`, en el tramo de 0 a 3.2 µs aproximadamente.
 
 ![Escritura en el sistema completo](sim/GTKWave_Images/tb_top_escritura.png)
 
-Señales: `btn` y `sw` (binario), `dut.pulso` (binario), `dut.addr_w`, `R0`–`R3` (decimal), `dut.led6_r`, `dut.led6_g` y `dut.led6_b`. Tramo de 0 a ~3.2 µs.
+Para cada registro, `sw` toma el valor que se va a escribir y luego se presionan `BTN1` y `BTN0`, y cada pulsación genera un pulso en `dut.pulso`. Con el pulso de `BTN1` cambia el registro indicado por `addr_w`, y con el de `BTN0` la dirección avanza y el LED RGB cambia de color, hasta que el banco queda con los valores `[5 3 12 9]`.
 
-Para cada registro, `sw` toma el valor a escribir y se presiona `BTN1` y luego `BTN0`. Cada pulsación genera un único pulso en `dut.pulso`. Con el pulso de `BTN1` cambia solo el registro indicado por `addr_w`, y con el de `BTN0`, `addr_w` avanza y el LED RGB cambia de color. Al final el banco queda en `[5 3 12 9]`.
+#### Sistema completo, ejecución y conservación (`tb_top.v`)
 
-#### Sistema completo: ejecución y conservación (`tb_top.v`)
+La captura de la ejecución muestra `btn` y `sw` en binario, `dut.addr_a`, `dut.addr_b`, `led` en binario, `alu_result` y `resultado` en decimal y `texto` en ASCII, desde cerca de 3.2 µs hasta el final de la simulación.
 
 ![Ejecución y conservación en el sistema completo](sim/GTKWave_Images/tb_top_ejecucion.png)
 
-Señales: `btn` y `sw` (binario), `dut.addr_a`, `dut.addr_b`, `led` (binario), `alu_result`, `resultado` (decimal) y `texto` (ASCII). Tramo desde ~3.2 µs hasta el final.
+Con la pareja R0, R1 y `sw` en `0000`, que corresponde a la suma, `BTN3` guarda el resultado 8 y `texto` muestra `"   8"`, y con `sw` en `0010`, la AND, se guarda 1 y se muestra `"0001"`.
 
-- **R0, R1:** con `sw = 0000` (suma), `BTN3` guarda 8 y `texto` muestra `"   8"`. Con `sw = 0010` (AND), guarda 1 y muestra `"0001"`.
-- **R0, R2:** `BTN2` cambia la pareja y `led` pasa de `0011` a `0101`. Con `sw = 0100` (XOR) se guarda 9 y el display muestra `"1001"`.
-- **Conservación:** `sw` pasa a `0000` y `BTN2` cambia la pareja a R0, R3. `alu_result` cambia con cada movimiento, pero `resultado` y `texto` **se mantienen** en 9 y `"1001"`, porque no se presionó `BTN3`.
-- **R0, R3:** al presionar `BTN3` se ejecuta la suma (14, `"  14"`), y con `sw = 0001`, la resta 5 − 9, que da 12 en módulo 16 (`"  12"`).
+Después `BTN2` cambia la pareja a R0, R2 y `led` pasa de `0011` a `0101`, y con `sw` en `0100`, la XOR, se guarda 9 y el display muestra `"1001"`.
+
+Para probar la conservación del resultado, `sw` pasa a `0000` y `BTN2` cambia la pareja a R0, R3. `alu_result` cambia con cada movimiento, pero `resultado` y `texto` se mantienen en 9 y `"1001"` porque no se presionó `BTN3`.
+
+Por último, con la pareja R0, R3, `BTN3` ejecuta la suma, que da 14 (`"  14"`), y con `sw` en `0001` la resta 5 − 9, que da la vuelta y resulta en 12 (`"  12"`).
 
 ## 6. Implementación en FPGA
 
@@ -471,8 +491,9 @@ El archivo `constrs/zybo_z7.xdc` asigna cada puerto de `top.v` a un pin de la Zy
 | `tm_clk` | V15 | Pmod JC, pin 1 |
 | `tm_dio` | W15 | Pmod JC, pin 2 (con `PULLUP true`) |
 
-
 ### 6.2 Conexión del TM1637
+
+El módulo del display se conecta al Pmod JC con cuatro cables, según la siguiente tabla.
 
 | TM1637 | Pmod JC |
 | --- | --- |
@@ -481,7 +502,7 @@ El archivo `constrs/zybo_z7.xdc` asigna cada puerto de `top.v` a un pin de la Zy
 | GND | Pin 5 |
 | VCC | Pin 6 (3.3 V) |
 
-A `tm_dio` se le activa el pull-up interno de la FPGA, ya que la línea es de drenador abierto y necesita una resistencia que la lleve a 1 cuando nadie la maneja.
+A `tm_dio` se le activa el pull-up interno de la FPGA, ya que la línea es de drenador abierto y necesita una resistencia que la lleve a 1 cuando ningún dispositivo la ocupa.
 
 ---
 
@@ -489,9 +510,13 @@ A `tm_dio` se le activa el pull-up interno de la FPGA, ya que la línea es de dr
 
 ### 7.1 Video de demostración
 
+El siguiente video muestra el sistema funcionando en la Zybo Z7 con los valores de prueba de la sección 7.2.
+
 https://github.com/user-attachments/assets/5525b1e7-5ded-4990-ac48-e17b8e3314a1
 
-### 8.2 Valores usados en la prueba
+### 7.2 Valores usados en la prueba
+
+Para la prueba en la placa se cargaron en los registros los valores de la siguiente tabla.
 
 | Registro | Valor (binario) | Valor (decimal) |
 | :---: | :---: | :---: |
@@ -506,20 +531,24 @@ https://github.com/user-attachments/assets/5525b1e7-5ded-4990-ac48-e17b8e3314a1
 
 ### 8.1 Lo que se observa en el video
 
-1. La carga de los valores de la tabla 8.2 en `R0`–`R3` con `SW[3:0]`, `BTN0` y `BTN1`. El LED RGB cambia de color al cambiar de registro.
-2. El cambio de pareja de operandos con `BTN2`. Los LEDs indican los registros activos.
+En el video se pueden distinguir cinco partes del funcionamiento del sistema, que se describen a continuación en el orden en que aparecen.
+
+1. La carga de los valores de la sección 7.2 en R0 a R3 con `SW[3:0]`, `BTN0` y `BTN1`, durante la cual el LED RGB cambia de color al cambiar de registro.
+2. El cambio de pareja de operandos con `BTN2`, con los LEDs indicando los registros activos.
 3. La ejecución de la suma y la resta con `BTN3`, con el resultado en decimal.
 4. La ejecución de las operaciones lógicas, con el resultado en binario.
-5. La conservación del resultado: al cambiar los switches y la pareja sin presionar `BTN3`, el display mantiene el último resultado.
+5. La conservación del resultado, ya que al cambiar los switches y la pareja sin presionar `BTN3` el display mantiene el último resultado.
 
 ### 8.2 Resultados esperados con los valores de prueba
 
-**Pareja R0, R1** (`A = 1010`, `B = 0101`):
+Las siguientes tablas presentan los resultados que se esperan en el display para las parejas R0, R1 y R0, R2 con los valores de prueba.
+
+**Pareja R0, R1** (`A = 1010`, `B = 0101`)
 
 | Operación | Resultado | Display |
 | --- | :---: | :---: |
-| Suma | 15 | `··15` |
-| Resta | 5 | `···5` |
+| Suma | 15 | `  15` |
+| Resta | 5 | `   5` |
 | AND | `0000` | `0000` |
 | OR | `1111` | `1111` |
 | XOR | `1111` | `1111` |
@@ -527,14 +556,14 @@ https://github.com/user-attachments/assets/5525b1e7-5ded-4990-ac48-e17b8e3314a1
 | NOT | `0101` | `0101` |
 | NAND | `1111` | `1111` |
 
-R0 y R1 son complementarios (no comparten ningún bit en 1), por eso AND da `0000` y OR y XOR dan `1111`.
+R0 y R1 son complementarios, es decir, no comparten ningún bit en 1, y por eso AND da `0000` mientras que OR y XOR dan `1111`.
 
-**Pareja R0, R2** (`A = 1010`, `B = 0011`):
+**Pareja R0, R2** (`A = 1010`, `B = 0011`)
 
 | Operación | Resultado | Display |
 | --- | :---: | :---: |
-| Suma | 13 | `··13` |
-| Resta | 7 | `···7` |
+| Suma | 13 | `  13` |
+| Resta | 7 | `   7` |
 | AND | `0010` | `0010` |
 | OR | `1011` | `1011` |
 | XOR | `1001` | `1001` |
@@ -542,23 +571,23 @@ R0 y R1 son complementarios (no comparten ningún bit en 1), por eso AND da `000
 | NOT | `0101` | `0101` |
 | NAND | `1101` | `1101` |
 
-El resultado de NOT es igual en ambas parejas porque solo depende de `A`, que en las dos es R0.
+El resultado de NOT es el mismo en ambas parejas porque depende de `A`, que en las dos es R0.
 
 ### 8.3 Observaciones
 
-- **Coincidencia entre simulación y hardware:** los valores mostrados en la placa coinciden con los esperados y con los de la simulación.
-- **Aritmética de 4 bits:** la suma y la resta trabajan en módulo 16. Un resultado mayor que 15 pierde el acarreo y una resta con `B > A` da la vuelta, ya que el diseño no representa números negativos. Para mostrarlos haría falta que la ALU entregara un bit de préstamo, porque con solo 4 bits de resultado no se puede distinguir, por ejemplo, un 14 de un −2.
-- **Uso de los switches para la operación:** al terminar de cargar datos, los switches quedan con el último valor escrito, que también es un código de operación válido. Si se presiona `BTN3` sin cambiarlos, se ejecuta esa operación, no la que se pretendía.
-- **Antirrebote:** sin él, una sola pulsación produciría varios cambios de registro o de pareja. Con el filtro de 10 ms, cada pulsación produce exactamente un pulso.
+- **Coincidencia entre simulación y hardware.** Los valores que muestra la placa coinciden con los esperados y con los obtenidos en la simulación.
+- **Aritmética de 4 bits.** La suma y la resta trabajan con 4 bits, por lo que un resultado mayor que 15 pierde el acarreo y una resta con `B` mayor que `A` da la vuelta, ya que el diseño no representa números negativos. Para mostrarlos haría falta que la ALU entregara un bit de préstamo, porque con 4 bits de resultado no se puede distinguir, por ejemplo, un 14 de un −2.
+- **Uso de los switches para la operación.** Al terminar de cargar datos, los switches quedan con el último valor escrito, que también es un código de operación válido, de modo que si se presiona `BTN3` sin cambiarlos se ejecuta esa operación y no la que se pretendía.
+- **Antirrebote.** Sin este módulo, una sola pulsación produciría varios cambios de registro o de pareja, mientras que con el filtro de 10 ms cada pulsación produce un solo pulso.
 
 ---
 
 ## 9. Conclusiones
 
-- **Funcionamiento completo:** el sistema cumplió los requerimientos de la guía. Los registros almacenaron los datos, el selector recorrió las 6 parejas con `BTN2`, la ALU ejecutó las 8 operaciones al presionar `BTN3` y el display conservó el último resultado hasta una nueva ejecución.
-- **Diseño modular:** dividir el sistema en bloques pequeños con una sola función permitió probar cada uno por separado con su propio testbench antes de integrarlos. `top.v` se limitó a instanciar y conectar, sin lógica propia.
-- **Simulación antes de implementar:** verificar cada módulo y el sistema completo en simulación permitió encontrar errores antes de programar la FPGA, donde depurar es más lento porque no se ven las señales internas.
-- **Conservación del resultado:** guardar el resultado **y** el código de operación en `reg_resultado` aisló el display de los cambios en los switches, los registros y la pareja de operandos. Guardar también la operación evita que el formato del display (decimal o binario) cambie al mover los switches.
-- **Estrategia de visualización:** el formato decimal facilita leer el resultado de la suma y la resta, mientras que el binario permite comprobar las operaciones lógicas bit a bit aprovechando los 4 dígitos del display.
-- **Interfaz con periféricos:** el TM1637 requirió implementar un protocolo serie de dos hilos parecido a I2C, con condiciones de START y STOP, bit menos significativo primero y confirmación (ACK) del receptor. Simularlo con un modelo del chip permitió verificar la trama bit a bit.
-- **Flujo de diseño:** el laboratorio aplicó el flujo completo de un sistema digital: especificación → diseño → simulación → implementación.
+- **Funcionamiento del sistema.** El sistema tuvo el comportamiento esperado, ya que los registros almacenaron los datos, el selector recorrió las seis parejas con `BTN2`, la ALU ejecutó las ocho operaciones al presionar `BTN3` y el display conservó el último resultado hasta una nueva ejecución.
+- **Diseño modular.** Dividir el sistema en bloques pequeños, cada uno con una función, permitió probarlos por separado con su propio testbench antes de integrarlos, mientras que `top.v` se limitó a instanciar y conectar los módulos, sin lógica propia.
+- **Simulación antes de implementar.** Verificar cada módulo y el sistema completo en simulación permitió encontrar errores antes de programar la FPGA, donde depurar es más lento porque no se pueden observar las señales internas.
+- **Conservación del resultado.** Guardar en `reg_resultado` el resultado y el código de operación aisló el display de los cambios en los switches, los registros y la pareja de operandos, y guardar la operación evitó que el formato del display cambiara al mover los switches.
+- **Estrategia de visualización.** El formato decimal facilita la lectura del resultado de la suma y la resta, mientras que el binario permite comprobar bit a bit las operaciones lógicas aprovechando los cuatro dígitos del display.
+- **Comunicación con el TM1637.** El display requirió implementar un protocolo serie de dos líneas parecido a I2C, con condiciones de START y STOP, envío del bit menos significativo primero y confirmación (ACK) por parte del receptor, y simularlo con un modelo del chip permitió verificar la trama bit a bit.
+- **Flujo de diseño.** El desarrollo siguió el flujo completo de un sistema digital, desde la especificación y el diseño hasta la simulación y la implementación.
