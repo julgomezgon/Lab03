@@ -241,11 +241,11 @@ Ambos registros inician en cero, es decir, a una suma con resultado 0, por lo qu
 
 El módulo `display_tm1637` agrupa dos submódulos.
 
-El módulo `display_tm1637` agrupa dos submódulos. El primero, `formato_display`, es combinacional y convierte la operación y el resultado guardados en los cuatro bytes que indican qué segmentos se encienden en cada dígito, mientras que el segundo, `tm1637_driver`, envía esos bytes al TM1637 por medio de una máquina de estados que genera las dos señales del bus en serie, el reloj `tm_clk` y la línea de datos `tm_dio`. La forma de representar los números y el funcionamiento de la comunicación con el TM1637 se explican en la sección 5.
+El módulo `display_tm1637` agrupa dos submódulos. El primero, `formato_display`, es combinacional y convierte la operación y el resultado guardados en los cuatro bytes que indican qué segmentos se encienden en cada dígito, mientras que el segundo, `tm1637_driver`, envía esos bytes al TM1637 por medio de una máquina de estados que genera las dos señales del bus en serie, el reloj `tm_clk` y la línea de datos `tm_dio`.
 
 ### 4.7 Indicadores
 
-El módulo `leds_operandos` enciende los LEDs de los registros que forman la pareja activa. Para hacerlo convierte cada dirección en una máscara de 4 bits con un único 1, desplazando el valor `0001` tantas posiciones como indique la dirección, y combina las dos máscaras con una operación OR, como se muestra en el siguiente fragmento.
+El módulo `leds_operandos` enciende los LEDs de los registros. Para hacerlo convierte cada dirección en un valor de 4 bits que tiene un 1 en la posición del registro y 0 en las demás, desplazando el valor `0001` tantas posiciones como indique la dirección, y luego combina los valores de A y B con una operación OR, como se muestra en el siguiente fragmento.
 
 ```verilog
 wire [3:0] mascara_a = 4'b0001 << addr_a;
@@ -254,9 +254,10 @@ wire [3:0] mascara_b = 4'b0001 << addr_b;
 assign led = mascara_a | mascara_b;
 ```
 
-Para la pareja R1, R3, por ejemplo, las máscaras son `0010` y `1000`, y su combinación `1010` enciende LD1 y LD3.
+Para R1, R3, por ejemplo, la dirección 1 se convierte en `0010` y la dirección 3 en `1000`, y su combinación `1010` enciende LD1 y LD3.
 
-El módulo `rgb_registro` asigna un color a cada registro de escritura por medio de un bloque combinacional que activa los canales rojo, verde y azul del LED RGB según la siguiente tabla. El amarillo se obtiene al encender al mismo tiempo los canales rojo y verde.
+
+El módulo `rgb_registro` asigna un color a cada registro de escritura por medio de un bloque combinacional que activa los canales rojo, verde y azul del LED RGB según la siguiente tabla. El amarillo se obtiene al encender al mismo tiempo el rojo y verde.
 
 | `addr_w` | Registro | Color | R | G | B |
 |---|---|---|---|---|---|
