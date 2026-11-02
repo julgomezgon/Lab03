@@ -1,162 +1,108 @@
-`timescale 1ns / 1ps
-// =============================================================================
-// top.v
-// -----------------------------------------------------------------------------
-// Módulo de nivel superior (Top-level) del sistema digital modular.
-// Integra los 4 módulos funcionales principales descritos en la guía:
-//   - reg_bank.v        (Banco de registros + control de escritura + LED RGB)
-//   - comb_selector.v   (Selector de combinaciones de operandos + LEDs)
-//   - alu.v             (Unidad aritmético-lógica de 4 bits / 8 operaciones)
-//   - display_tm1637.v  (Retención del resultado + formateo + controlador TM1637)
-//
-// Mapeo físico en Zybo Z7:
-//   SW[3:0] : Dato de entrada para escritura en registros
-//   SW[2:0] : Operación seleccionada de la ALU
-//   BTN0    : Cambiar registro de escritura (R0 -> R1 -> R2 -> R3)
-//   BTN1    : Escribir dato actual en el registro seleccionado
-//   BTN2    : Cambiar combinación de operandos (A, B)
-//   BTN3    : Ejecutar operación ALU y actualizar el resultado en el display
-//   LED[3:0]: Registros activos en la operación actual
-//   LED RGB : Registro seleccionado actualmente para escritura
-//   TM1637  : Muestra el resultado de la última operación ejecutada
-// =============================================================================
 module top #(
-    parameter integer DEBOUNCE_CYCLES = 2_500_000,  // 20 ms @ 125 MHz (en simulación se reduce)
-    parameter integer TM_CLK_DIV      = 1250        // Divisor reloj serie TM1637
-)(
-    input  wire       sysclk,
-    input  wire [3:0] sw,
-    input  wire [3:0] btn,
-    output wire [3:0] led,
-    output wire       led6_r,
+    parameter DEBOUNCE = 1_250_000,   // 10 ms a 125 MHz
+    parameter TM_DIV   = 625          // bus TM1637 a 50 kHz
+) (
+    input  wire       clk,      // reloj de 125 MHz
+    input  wire [3:0] sw,       // dato (SW[3:0]) / operación (SW[2:0])
+    input  wire [3:0] btn,      // BTN0 sel. registro, BTN1 escribir, BTN2 combinación, BTN3 ejecutar
+    output wire [3:0] led,      // registros activos
+    output wire       led6_r,   // LED RGB: registro de escritura
     output wire       led6_g,
     output wire       led6_b,
-    output wire       tm_clk,
+    output wire       tm_clk,   // TM1637
     inout  wire       tm_dio
 );
 
-    // -------------------------------------------------------------------------
-    // Señales de pulsos de botones (filtrados por antirrebote)
-    // -------------------------------------------------------------------------
-    wire [3:0] btn_pulse;
+    // Cables internos
+    wire [3:0] pulso;           // pulsos limpios de los botones
+    wire [1:0] addr_w;
+    wire [1:0] addr_a;
+    wire [1:0] addr_b;
+    wire [3:0] dato_a;
+    wire [3:0] dato_b;
+    wire [3:0] alu_result;
+    wire [3:0] res_guardado;
+    wire [2:0] op_guardada;
 
-    genvar k;
+    // Antirrebote de los 4 botones
+    genvar i;
     generate
-        for (k = 0; k < 4; k = k + 1) begin : g_btn
-            btn_debounce #(.DEBOUNCE_CYCLES(DEBOUNCE_CYCLES)) u_db (
-                .clk       (sysclk),
-                .btn_in    (btn[k]),
-                .pulse     (btn_pulse[k])
+        for (i = 0; i < 4; i = i + 1) begin : ar
+            antirrebote #(.LIMITE(DEBOUNCE)) ar_btn (
+                .clk   (clk),
+                .btn   (btn[i]),
+                .pulso (pulso[i])
             );
         end
     endgenerate
 
-    // -------------------------------------------------------------------------
-    // Interconexiones del Datapath
-    // -------------------------------------------------------------------------
-    wire [1:0]  addr_a, addr_b;
-    wire [3:0]  data_a, data_b;
-    wire [4:0]  alu_result;
-    wire [2:0]  rgb;
-    wire [1:0]  wr_addr;
-    wire [4:0]  result_latched;
-    wire [2:0]  op_latched;
-    wire        valid;
-    wire [31:0] seg_data;
-
-    // -------------------------------------------------------------------------
-    // 1. Selector de Combinaciones de Operandos (comb_selector.v)
-    // -------------------------------------------------------------------------
-    comb_selector u_comb (
-        .clk         (sysclk),
-        .next        (btn_pulse[2]),  // BTN2 conmuta la pareja (A, B)
-        .addr_a      (addr_a),
-        .addr_b      (addr_b),
-        .active_mask (led)            // LEDs[3:0] indican registros activos
+    // Registro de escritura (BTN0)
+    sel_escritura sel_w (
+        .clk       (clk),
+        .siguiente (pulso[0]),
+        .addr_w    (addr_w)
     );
 
-    // -------------------------------------------------------------------------
-    // 2. Banco de Registros (reg_bank.v)
-    // -------------------------------------------------------------------------
-    reg_bank u_reg_bank (
-        .clk          (sysclk),
-        .sel_next     (btn_pulse[0]), // BTN0 selecciona registro de escritura
-        .write_enable (btn_pulse[1]), // BTN1 escribe dato en registro
-        .wr_data      (sw),           // SW[3:0] dato de entrada
+    // Banco de registros (BTN1 escribe)
+    reg_bank banco (
+        .clk          (clk),
+        .write_enable (pulso[1]),
+        .addr_w       (addr_w),
+        .data_w       (sw),
         .addr_a       (addr_a),
         .addr_b       (addr_b),
-        .data_a       (data_a),
-        .data_b       (data_b),
-        .wr_addr      (wr_addr),
-        .rgb          (rgb)           // LED RGB indica registro seleccionado
+        .data_a       (dato_a),
+        .data_b       (dato_b)
     );
 
-    // -------------------------------------------------------------------------
-    // 3. Unidad Aritmético-Lógica (alu.v)
-    // -------------------------------------------------------------------------
-    alu u_alu (
-        .A      (data_a),
-        .B      (data_b),
-        .op     (sw[2:0]),            // SW[2:0] selecciona la operación
+    // Combinación de operandos (BTN2)
+    comb_selector comb (
+        .clk       (clk),
+        .siguiente (pulso[2]),
+        .indice    (),
+        .addr_a    (addr_a),
+        .addr_b    (addr_b)
+    );
+
+    // ALU
+    alu mi_alu (
+        .A      (dato_a),
+        .B      (dato_b),
+        .op     (sw[2:0]),
         .result (alu_result)
     );
 
-    // -------------------------------------------------------------------------
-    // 4. Módulo de Visualización y Retención (display_tm1637.v)
-    // -------------------------------------------------------------------------
-    display_tm1637 #(.CLK_DIV(TM_CLK_DIV)) u_display (
-        .clk            (sysclk),
-        .exec           (btn_pulse[3]),  // BTN3 ejecuta y captura resultado
-        .alu_op         (sw[2:0]),
-        .alu_result     (alu_result),
-        .tm_clk         (tm_clk),
-        .tm_dio         (tm_dio),
-        .result_latched (result_latched),
-        .op_latched     (op_latched),
-        .valid          (valid),
-        .seg_data       (seg_data)
+    // Resultado guardado (BTN3 ejecuta)
+    reg_resultado res (
+        .clk       (clk),
+        .ejecutar  (pulso[3]),
+        .result_in (alu_result),
+        .op_in     (sw[2:0]),
+        .result    (res_guardado),
+        .op        (op_guardada)
     );
 
-    // -------------------------------------------------------------------------
-    // Salidas físicas del LED RGB
-    // -------------------------------------------------------------------------
-    assign led6_r = rgb[2];
-    assign led6_g = rgb[1];
-    assign led6_b = rgb[0];
+    // Display TM1637
+    display_tm1637 #(.DIV(TM_DIV)) disp (
+        .clk    (clk),
+        .op     (op_guardada),
+        .result (res_guardado),
+        .tm_clk (tm_clk),
+        .tm_dio (tm_dio)
+    );
 
-endmodule
+    // LEDs y LED RGB
+    leds_operandos ind_leds (
+        .addr_a (addr_a),
+        .addr_b (addr_b),
+        .led    (led)
+    );
 
-// =============================================================================
-// Módulo auxiliar de acondicionamiento de pulsador (Antirrebote + Detector de flanco)
-// =============================================================================
-module btn_debounce #(
-    parameter integer DEBOUNCE_CYCLES = 2_500_000
-)(
-    input  wire clk,
-    input  wire btn_in,
-    output reg  pulse = 1'b0
-);
-    localparam integer CW = (DEBOUNCE_CYCLES < 2) ? 1 : $clog2(DEBOUNCE_CYCLES);
+    rgb_registro ind_rgb (
+        .addr_w (addr_w),
+        .r      (led6_r),
+        .g      (led6_g),
+        .b      (led6_b)
+    );
 
-    reg          sync0 = 1'b0;
-    reg          sync1 = 1'b0;
-    reg          btn_level = 1'b0;
-    reg [CW-1:0] cnt   = {CW{1'b0}};
-
-    always @(posedge clk) begin
-        sync0 <= btn_in;
-        sync1 <= sync0;
-        pulse <= 1'b0;
-
-        if (sync1 == btn_level) begin
-            cnt <= {CW{1'b0}};
-        end else if (cnt == DEBOUNCE_CYCLES - 1) begin
-            cnt       <= {CW{1'b0}};
-            btn_level <= sync1;
-            if (sync1)
-                pulse <= 1'b1;
-        end else begin
-            cnt <= cnt + 1'b1;
-        end
-    end
 endmodule
