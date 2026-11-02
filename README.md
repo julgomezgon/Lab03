@@ -219,7 +219,7 @@ always @(*) begin
 end
 ```
 
-Las operaciones lógicas se aplican bit a bit, por lo tanto, cada bit del resultado depende de los bits de A y B que estén en la misma posición. En las operaciones aritméticas el resultado también tiene 4 bits y solo puede representar valores de 0 a 15, por lo que, cuando una suma supera ese rango o una resta da un valor negativo, el resultado da la vuelta y continúa desde el otro extremo. Por ejemplo, 9 + 9 da 2 en lugar de 18 y 3 − 5 da 14 en lugar de −2, este comportamiento se analiza en la sección 8.
+Las operaciones lógicas se aplican bit a bit, por lo tanto, cada bit del resultado depende de los bits de A y B que estén en la misma posición. En las operaciones aritméticas el resultado también tiene 4 bits y solo puede representar valores de 0 a 15, por lo que, cuando una suma supera ese rango o una resta da un valor negativo, el resultado da la vuelta y continúa desde el otro extremo. Por ejemplo, 9 + 9 da 2 en lugar de 18 y 3 − 5 da 14 en lugar de −2.
 
 ### 4.5 Registro del resultado
 
