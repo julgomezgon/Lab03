@@ -257,17 +257,17 @@ Al inicio de cada trama, el driver copia los dígitos en un buffer, por lo que u
 
 ![Simulación de la ALU](sim/GTKWave_Images/tb_alu.png)
 
-Señales: `op`, `A`, `B` y `result`, en binario. Cada prueba dura 10 ns y se aplican las 8 operaciones.
+Señales: `op`, `A`, `B` y `esperado`, en binario. Cada prueba dura 10 ns y se aplican las 8 operaciones.
 
-- **0–40 ns, suma y resta:** `0101 + 0011 = 1000` (8) y `0101 - 0011 = 0010` (2). Además se prueban los límites de 4 bits: `1111 + 1111` da `1110` (14), porque se pierde el acarreo de 30, y `0011 - 0101` da `1110` (14), que es −2 en módulo 16.
+- **0–40 ns, suma y resta:** `0101 + 0011 = 1000` (8) y `0101 - 0011 = 0010` (2). Además se prueban los límites de 4 bits: `1111 + 1111` da `1110` (14), porque se pierde el acarreo de 30, y `0011 - 0101` da `1110` (14 o  E), que es −2 en módulo 16.
 - **40–110 ns, operaciones lógicas:** con `A = 1100` y `B = 1010` aparecen las cuatro combinaciones de bits, así que cada resultado corresponde a la tabla de verdad completa: AND `1000`, OR `1110`, XOR `0110`, XNOR `1001` y NAND `0111`.
 - **80–100 ns, NOT:** se ejecuta dos veces con el mismo `A` y distinto `B` (`1010` y `0000`), y en ambos casos el resultado es `0011`. Esto confirma que el negador solo usa `A`.
 
-En todos los tramos `result` cambia en el mismo instante que las entradas, porque la ALU es combinacional.
+En todos los tramos `esperado` cambia en el mismo instante que las entradas, porque la ALU es combinacional.
 
 #### Banco de registros (`tb_reg_bank.v`)
 
-![Simulación del banco de registros](sim/GTKWAVE_IMAGES/tb_reg_bank.png)
+![Simulación del banco de registros](sim/GTKWave_Images/tb_reg_bank.png)
 
 Señales: `clk`, `write_enable`, `siguiente`, `addr_w`, `data_w`, `R0`–`R3`, `addr_a`, `addr_b`, `data_a` y `data_b`, en decimal.
 
@@ -277,7 +277,7 @@ Señales: `clk`, `write_enable`, `siguiente`, `addr_w`, `data_w`, `R0`–`R3`, `
 
 #### Selector de combinaciones (`tb_comb_selector.v`)
 
-![Simulación del selector de combinaciones](sim/GTKWAVE_IMAGES/tb_comb_selector.png)
+![Simulación del selector de combinaciones](sim/GTKWave_Images/tb_comb_selector.png)
 
 Señales: `clk`, `siguiente`, `indice`, `addr_a` y `addr_b`, en decimal.
 
@@ -285,7 +285,7 @@ Cada pulso de `siguiente` hace avanzar `indice` en el siguiente flanco de subida
 
 #### Antirrebote (`tb_almacenamiento.v`)
 
-![Simulación del antirrebote](sim/GTKWAVE_IMAGES/tb_antirrebote.png)
+![Simulación del antirrebote](sim/GTKWave_Images/tb_antirrebote.png)
 
 Señales: `btn`, `ar.estable`, `ar.contador` (decimal) y `pulso`. Se muestra el tramo de 0 a 1110 ns.
 
@@ -295,7 +295,7 @@ Señales: `btn`, `ar.estable`, `ar.contador` (decimal) y `pulso`. Se muestra el 
 
 #### Registro del resultado (`tb_almacenamiento.v`)
 
-![Simulación del registro del resultado](sim/GTKWAVE_IMAGES/tb_reg_resultado.png)
+![Simulación del registro del resultado](sim/GTKWave_Images/tb_reg_resultado.png)
 
 Señales: `clk`, `ejecutar`, `result_in`, `op_in`, `result` y `op`, en decimal y binario. Se muestra el tramo final de la simulación, desde ~1100 ns.
 
@@ -303,7 +303,7 @@ Señales: `clk`, `ejecutar`, `result_in`, `op_in`, `result` y `op`, en decimal y
 
 #### LEDs y LED RGB (`tb_indicadores.v`)
 
-![Simulación de los indicadores](sim/GTKWAVE_IMAGES/tb_indicadores.png)
+![Simulación de los indicadores](sim/GTKWave_Images/tb_indicadores.png)
 
 Señales: `addr_a`, `addr_b`, `led` (binario), `addr_w`, `r`, `g` y `b`. Cada prueba dura 10 ns.
 
@@ -312,19 +312,19 @@ Señales: `addr_a`, `addr_b`, `led` (binario), `addr_w`, `r`, `g` y `b`. Cada pr
 
 #### Trama del TM1637 (`tb_tm1637_trama.v`)
 
-![Simulación de la trama del TM1637](sim/GTKWAVE_IMAGES/tb_tm1637_trama.png)
+![Simulación de la trama del TM1637](sim/GTKWave_Images/tb_tm1637_trama.png)
 
 Señales: `tm_clk`, `tm_dio`, `estado`, `n_byte` (decimal), `byte_tx` (hexadecimal), `ack` y `texto` (ASCII). Vista completa, con las dos tramas enviadas.
 
 Cada trama se ve como tres grupos de pulsos de `tm_clk`: uno corto para `0x40`, uno largo para `0xC0` y los 4 dígitos, y otro corto para `0x8A`. Entre los grupos, `tm_clk` queda en 1 y `tm_dio` marca el STOP y el siguiente START. `byte_tx` muestra el byte que se está enviando y `n_byte` su posición en la trama (0 a 6). Al recibir `0x8A`, `texto` se actualiza: después de la primera trama muestra `"  12"` (suma = 12) y después de la segunda `"0101"` (AND = `0101`).
 
-![Detalle de la etapa 2 del TM1637](sim/GTKWAVE_IMAGES/tb_tm1637_etapa2.png)
+![Detalle de la etapa 2 del TM1637](sim/GTKWave_Images/tb_tm1637_etapa2.png)
 
 Detalle de la etapa 2 de la primera trama. `tm_dio` solo cambia mientras `tm_clk` está en 0, y el receptor lee un bit en cada flanco de subida de `tm_clk`, empezando por el menos significativo. Después de cada 8 bits hay un noveno pulso en el que `ack` está en 1: el modelo del TM1637 baja `tm_dio` para confirmar la recepción. Los bytes enviados son `C0`, `00`, `00`, `06` y `5B`: la dirección del primer dígito, dos dígitos apagados y los segmentos de `1` y `2`.
 
 #### Sistema completo: escritura (`tb_top.v`)
 
-![Escritura en el sistema completo](sim/GTKWAVE_IMAGES/tb_top_escritura.png)
+![Escritura en el sistema completo](sim/GTKWave_Images/tb_top_escritura.png)
 
 Señales: `btn` y `sw` (binario), `dut.pulso` (binario), `dut.addr_w`, `R0`–`R3` (decimal), `dut.led6_r`, `dut.led6_g` y `dut.led6_b`. Tramo de 0 a ~3.2 µs.
 
@@ -332,7 +332,7 @@ Para cada registro, `sw` toma el valor a escribir y se presiona `BTN1` y luego `
 
 #### Sistema completo: ejecución y conservación (`tb_top.v`)
 
-![Ejecución y conservación en el sistema completo](sim/GTKWAVE_IMAGES/tb_top_ejecucion.png)
+![Ejecución y conservación en el sistema completo](sim/GTKWave_Images/tb_top_ejecucion.png)
 
 Señales: `btn` y `sw` (binario), `dut.addr_a`, `dut.addr_b`, `led` (binario), `alu_result`, `resultado` (decimal) y `texto` (ASCII). Tramo desde ~3.2 µs hasta el final.
 
