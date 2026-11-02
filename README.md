@@ -345,7 +345,7 @@ Señales: `btn` y `sw` (binario), `dut.addr_a`, `dut.addr_b`, `led` (binario), `
 
 ### 6.1 Asignación de pines
 
-El archivo `constraints/lab03.xdc` parte del archivo general de Digilent para la Zybo Z7. Solo están activos los pines que usa `top.v`.
+El archivo `constrs/zybo_z7.xdc` consta de los pines que se utilizaron para el módulo TM1637.
 
 | Señal | Pin | Elemento de la placa |
 | --- | :---: | --- |
@@ -357,7 +357,6 @@ El archivo `constraints/lab03.xdc` parte del archivo general de Digilent para la
 | `tm_clk` | V15 | Pmod JC, pin 1 |
 | `tm_dio` | W15 | Pmod JC, pin 2 (con `PULLUP true`) |
 
-Se usa el LED RGB **LD6** porque es el que tienen tanto la Z7-10 como la Z7-20 (LD5 solo existe en la Z7-20).
 
 ### 6.2 Conexión del TM1637
 
