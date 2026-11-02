@@ -367,7 +367,7 @@ Entre 60 y 100 ns `addr_w` recorre los valores de 0 a 3 y `{r, g, b}` toma `100`
 
 #### Trama del TM1637 (`tb_tm1637_trama.v`)
 
-El TM1637 no recibe el resultado como un número, sino como una secuencia de bytes que llega por dos líneas, `CLK` y `DIO`. El módulo `tm1637_driver` arma esa secuencia y la repite de forma continua, y en cada repetición, llamada trama, configura el modo de escritura, envía los cuatro dígitos y enciende el display, en ese orden.
+El TM1637 recibe el resultado como una secuencia de bytes que llega por dos líneas, `CLK` y `DIO`. El módulo `tm1637_driver` arma esa secuencia y la repite de forma continua, y en cada repetición, llamada trama, configura el modo de escritura, envía los cuatro dígitos y enciende el display, en ese orden.
 
 **Estructura de la trama**
 
@@ -385,7 +385,7 @@ Cada trama tiene siete bytes repartidos en tres etapas, y cada etapa empieza con
 
 Por esta razón, en el código el STOP va después de los bytes 0, 5 y 6, como indica la señal `stop_despues`, ya que la dirección automática permite enviar `0xC0` y los cuatro dígitos seguidos en una sola etapa.
 
-Los dígitos no se envían como números, sino como el patrón de segmentos que se debe encender, donde el bit 0 corresponde al segmento a, el bit 1 al b y así hasta el bit 6, que corresponde al g, mientras que el bit 7 controla el punto. La siguiente tabla muestra los patrones que aparecen en esta simulación.
+Los dígitos se envían como el patrón de segmentos que se debe encender, donde el bit 0 corresponde al segmento a, el bit 1 al b y así hasta el bit 6, que corresponde al g, mientras que el bit 7 controla el punto. La siguiente tabla muestra los patrones que aparecen en esta simulación.
 
 | Carácter | Byte | Binario | Segmentos encendidos |
 | :---: | :---: | :---: | --- |
