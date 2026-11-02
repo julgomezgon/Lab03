@@ -1,0 +1,143 @@
+$date
+	Sun Nov 01 21:35:24 2026
+$end
+$version
+	Icarus Verilog
+$end
+$timescale
+	1ps
+$end
+$scope module tb_indicadores $end
+$var wire 1 ! r $end
+$var wire 4 " led [3:0] $end
+$var wire 1 # g $end
+$var wire 1 $ b $end
+$var reg 2 % addr_a [1:0] $end
+$var reg 2 & addr_b [1:0] $end
+$var reg 2 ' addr_w [1:0] $end
+$var integer 32 ( errores [31:0] $end
+$var integer 32 ) i [31:0] $end
+$scope function color $end
+$var reg 2 * n [1:0] $end
+$upscope $end
+$scope module uled $end
+$var wire 2 + addr_a [1:0] $end
+$var wire 2 , addr_b [1:0] $end
+$var wire 4 - led [3:0] $end
+$var wire 4 . mascara_b [3:0] $end
+$var wire 4 / mascara_a [3:0] $end
+$upscope $end
+$scope module urgb $end
+$var wire 2 0 addr_w [1:0] $end
+$var reg 1 $ b $end
+$var reg 1 # g $end
+$var reg 1 ! r $end
+$upscope $end
+$scope task probar_leds $end
+$var reg 2 1 a [1:0] $end
+$var reg 2 2 b [1:0] $end
+$var reg 4 3 esperado [3:0] $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+$comment Show the parameter values. $end
+$dumpall
+$end
+#0
+$dumpvars
+b11 3
+b1 2
+b0 1
+bx 0
+b1 /
+b10 .
+b11 -
+b1 ,
+b0 +
+bx *
+bx )
+b0 (
+bx '
+b1 &
+b0 %
+x$
+x#
+b11 "
+x!
+$end
+#10000
+b101 "
+b101 -
+b100 .
+b10 &
+b10 ,
+b101 3
+b10 2
+#20000
+b1001 "
+b1001 -
+b1000 .
+b11 &
+b11 ,
+b1001 3
+b11 2
+#30000
+b110 "
+b110 -
+b100 .
+b10 &
+b10 ,
+b10 /
+b1 %
+b1 +
+b110 3
+b10 2
+b1 1
+#40000
+b1010 "
+b1010 -
+b1000 .
+b11 &
+b11 ,
+b1010 3
+b11 2
+#50000
+b1100 "
+b1100 -
+b100 /
+b10 %
+b10 +
+b1100 3
+b10 1
+#60000
+1!
+0#
+0$
+b0 '
+b0 0
+b0 )
+#70000
+0!
+1#
+b1 '
+b1 0
+b1 )
+b0 *
+#80000
+0#
+1$
+b10 '
+b10 0
+b10 )
+b1 *
+#90000
+1!
+1#
+0$
+b11 '
+b11 0
+b11 )
+b10 *
+#100000
+b100 )
+b11 *
