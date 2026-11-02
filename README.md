@@ -255,7 +255,7 @@ Al inicio de cada trama, el driver copia los dígitos en un buffer, por lo que u
 
 #### ALU (`tb_alu.v`)
 
-![Simulación de la ALU](sim/GTKWAVE_IMAGES/tb_alu.png)
+![Simulación de la ALU](sim/GTKWave_Images/tb_alu.png)
 
 Señales: `op`, `A`, `B` y `result`, en binario. Cada prueba dura 10 ns y se aplican las 8 operaciones.
 
