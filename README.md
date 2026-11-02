@@ -303,24 +303,86 @@ Señales: `clk`, `ejecutar`, `result_in`, `op_in`, `result` y `op`, en decimal y
 
 #### LEDs y LED RGB (`tb_indicadores.v`)
 
-![Simulación de los indicadores](sim/GTKWave_Images/tb_indicadores.png)
-
-Señales: `addr_a`, `addr_b`, `led` (binario), `addr_w`, `r`, `g` y `b`. Cada prueba dura 10 ns.
-
-- **0–60 ns, LEDs de operandos:** para cada pareja, `led` tiene en 1 exactamente los bits de los dos registros activos: `0011`, `0101`, `1001`, `0110`, `1010` y `1100`.
-- **60–100 ns, LED RGB:** `addr_w` recorre 0 a 3 y `{r, g, b}` toma `100` (rojo), `010` (verde), `001` (azul) y `110` (amarillo). Antes de los 60 ns `addr_w` aún no tiene valor asignado, por eso aparece indefinido.
-
 #### Trama del TM1637 (`tb_tm1637_trama.v`)
+
+El TM1637 no recibe el número directamente: recibe una secuencia de bytes por dos líneas, `CLK` y `DIO`. El módulo `tm1637_driver` arma esa secuencia y la repite de forma continua. Para que el display muestre un resultado, cada repetición (trama) tiene que hacer tres cosas en orden: configurar el modo de escritura, enviar los 4 dígitos y encender el display.
+
+**Estructura de la trama.** Una trama tiene 7 bytes repartidos en 3 etapas. Cada etapa empieza con un START y termina con un STOP:
+
+| `n_byte` | Etapa | Byte | Binario | Función |
+| :---: | :---: | :---: | :---: | --- |
+| 0 | 1 | `0x40` | `0100 0000` | **Comando de datos.** Los bits `01` indican que es un comando de datos, el bit 2 en `0` activa la dirección automática y los bits `00` indican escritura en el display. |
+| 1 | 2 | `0xC0` | `1100 0000` | **Comando de dirección.** Los bits `11` indican que es un comando de dirección y `0000` que la escritura empieza en el dígito 0 (el de la izquierda). |
+| 2 | 2 | dígito 0 | segmentos | Segmentos del dígito 0. |
+| 3 | 2 | dígito 1 | segmentos | Segmentos del dígito 1. Por la dirección automática, se guarda en la siguiente posición sin enviar otra dirección. |
+| 4 | 2 | dígito 2 | segmentos | Segmentos del dígito 2. |
+| 5 | 2 | dígito 3 | segmentos | Segmentos del dígito 3. |
+| 6 | 3 | `0x8A` | `1000 1010` | **Control del display.** Los bits `10` indican que es un comando de control, el bit 3 en `1` enciende el display y `010` fija el brillo en el nivel 2 (de 0 a 7). |
+
+Por eso en el código el STOP solo va después de los bytes 0, 5 y 6 (`stop_despues`): gracias a la dirección automática, `0xC0` y los 4 dígitos se envían seguidos en una sola etapa.
+
+Los dígitos no se envían como números, sino como el patrón de segmentos que se debe encender. Cada bit corresponde a un segmento: bit 0 = a, bit 1 = b, …, bit 6 = g y bit 7 = punto. Los que aparecen en esta simulación son:
+
+| Carácter | Byte | Binario | Segmentos encendidos |
+| :---: | :---: | :---: | --- |
+| apagado | `0x00` | `0000 0000` | Ninguno |
+| `0` | `0x3F` | `0011 1111` | a, b, c, d, e, f |
+| `1` | `0x06` | `0000 0110` | b, c |
+| `2` | `0x5B` | `0101 1011` | a, b, d, e, g |
+
+**Transmisión de un byte.** La máquina de estados del driver tiene 4 estados, y cada uno se divide en 4 fases de igual duración. En la simulación (`DIV = 4`) cada fase dura 32 ns; en la placa (`DIV = 625`) dura 5 µs, lo que da un reloj de 50 kHz en `tm_clk`.
+
+| Estado (`estado`) | Fase 0 | Fase 1 | Fase 2 | Fase 3 |
+| --- | --- | --- | --- | --- |
+| START (0) | `CLK` = 1, `DIO` libre | `DIO` baja con `CLK` en 1 → **START** | — | Pasa a enviar bits |
+| BIT (1) | `CLK` baja | Se pone el bit en `DIO` | `CLK` sube → **el TM1637 lee el bit** | Siguiente bit, o ACK tras el 8.º |
+| ACK (2) | `CLK` baja | El driver suelta `DIO` | `CLK` sube → **el TM1637 responde** | STOP, o siguiente byte |
+| STOP (3) | `CLK` baja | `DIO` en 0 | `CLK` sube | `DIO` sube con `CLK` en 1 → **STOP** |
+
+De esta tabla salen las reglas que se deben ver en la simulación:
+
+- **Los datos solo cambian con `CLK` en 0** (fase 1 de BIT) y se leen en el flanco de subida (fase 2). Así, cuando el TM1637 lee, `DIO` ya está estable.
+- **Un cambio de `DIO` con `CLK` en 1 es una señal de control:** si baja es START y si sube es STOP. Como los datos nunca cambian con `CLK` en 1, el TM1637 puede distinguir un bit de un START o un STOP.
+- **Los bits se envían del menos significativo al más significativo** (`dato[n_bit]`, con `n_bit` de 0 a 7). En la onda, cada byte aparece escrito "al revés".
+- **`DIO` es de drenador abierto:** el driver solo la pone en 0 o la suelta (`1'bz`), y la resistencia de pull-up la lleva a 1. Así, en el noveno pulso (ACK), el TM1637 puede bajarla para confirmar que recibió el byte.
+
+Cada byte usa entonces 9 pulsos de `tm_clk`: 8 de datos y 1 de ACK. Antes de cada STOP hay un pulso adicional que no lleva información y sirve para dejar `DIO` en 0 antes de subirla. Por eso las etapas 1 y 3 tienen 10 pulsos (9 + 1) y la etapa 2 tiene 46 (5 × 9 + 1).
+
+**Vista completa**
 
 ![Simulación de la trama del TM1637](sim/GTKWave_Images/tb_tm1637_trama.png)
 
-Señales: `tm_clk`, `tm_dio`, `estado`, `n_byte` (decimal), `byte_tx` (hexadecimal), `ack` y `texto` (ASCII). Vista completa, con las dos tramas enviadas.
+Señales: `tm_clk`, `tm_dio`, `estado`, `n_byte` (decimal), `byte_tx` (hexadecimal), `ack` y `texto` (ASCII). Se envían dos tramas, cada una de unos 8.8 µs:
 
-Cada trama se ve como tres grupos de pulsos de `tm_clk`: uno corto para `0x40`, uno largo para `0xC0` y los 4 dígitos, y otro corto para `0x8A`. Entre los grupos, `tm_clk` queda en 1 y `tm_dio` marca el STOP y el siguiente START. `byte_tx` muestra el byte que se está enviando y `n_byte` su posición en la trama (0 a 6). Al recibir `0x8A`, `texto` se actualiza: después de la primera trama muestra `"  12"` (suma = 12) y después de la segunda `"0101"` (AND = `0101`).
+| Trama | Entrada del display | Bytes enviados | `texto` al terminar |
+| :---: | --- | --- | :---: |
+| 1 | `op = 000` (suma), `result = 12` | `40` · `C0 00 00 06 5B` · `8A` | `"  12"` |
+| 2 | `op = 010` (AND), `result = 0101` | `40` · `C0 3F 06 3F 06` · `8A` | `"0101"` |
+
+En cada trama se distinguen tres grupos de pulsos de `tm_clk`: uno corto (etapa 1, ~1.4 µs), uno largo (etapa 2, ~6 µs) y otro corto (etapa 3, ~1.4 µs). Entre grupos, `tm_clk` queda en 1 mientras `tm_dio` marca el STOP de una etapa y el START de la siguiente. `n_byte` avanza de 0 a 6 y `byte_tx` muestra el byte que se transmite en cada momento.
+
+La suma se muestra en decimal (`12` en los dos dígitos de la derecha y los otros apagados) y la AND en binario (un bit por dígito), según la estrategia de visualización. `texto` solo cambia cuando el modelo recibe `0x8A`, igual que el TM1637 real, que muestra los dígitos al recibir el comando de encendido.
+
+Los dígitos de cada trama no se mezclan aunque `op` y `result` cambien a mitad de una trama: al comenzar cada trama (START con `n_byte = 0`), el driver copia los 4 dígitos en `buf0`–`buf3` y transmite esa copia. Por eso el cambio de entrada al final de la primera trama solo aparece en la segunda.
+
+**Detalle de la etapa 2**
 
 ![Detalle de la etapa 2 del TM1637](sim/GTKWave_Images/tb_tm1637_etapa2.png)
 
-Detalle de la etapa 2 de la primera trama. `tm_dio` solo cambia mientras `tm_clk` está en 0, y el receptor lee un bit en cada flanco de subida de `tm_clk`, empezando por el menos significativo. Después de cada 8 bits hay un noveno pulso en el que `ack` está en 1: el modelo del TM1637 baja `tm_dio` para confirmar la recepción. Los bytes enviados son `C0`, `00`, `00`, `06` y `5B`: la dirección del primer dígito, dos dígitos apagados y los segmentos de `1` y `2`.
+Etapa 2 de la primera trama (`n_byte` de 1 a 5, aproximadamente de 1.4 µs a 7.4 µs). Empieza con un START: `tm_dio` baja mientras `tm_clk` está en 1. Desde ahí, leyendo `tm_dio` en cada flanco de subida de `tm_clk`, se obtienen los bits de cada byte:
+
+| Byte | `tm_dio` en los pulsos 1 → 8 | Leído del bit 7 al 0 | Pulso 9 |
+| :---: | :---: | :---: | :---: |
+| `C0` | `0 0 0 0 0 0 1 1` | `1100 0000` | ACK |
+| `00` | `0 0 0 0 0 0 0 0` | `0000 0000` | ACK |
+| `00` | `0 0 0 0 0 0 0 0` | `0000 0000` | ACK |
+| `06` | `0 1 1 0 0 0 0 0` | `0000 0110` | ACK |
+| `5B` | `1 1 0 1 1 0 1 0` | `0101 1011` | ACK |
+
+En el noveno pulso de cada byte, `ack` está en 1: el modelo del TM1637 baja `tm_dio` para confirmar la recepción, aunque el driver ya la haya soltado. Justo después, cuando `tm_clk` baja, `tm_dio` puede subir un instante por el pull-up antes de que el driver ponga el primer bit del siguiente byte; como ocurre con `tm_clk` en 0, no se interpreta como STOP. Después del quinto ACK, el pulso adicional y la subida de `tm_dio` con `tm_clk` en 1 forman el STOP que cierra la etapa.
+
+Entre los 5 bytes no hay START ni STOP: es una sola transmisión continua, posible gracias a la dirección automática configurada con `0x40`.
+
 
 #### Sistema completo: escritura (`tb_top.v`)
 
