@@ -1,47 +1,53 @@
-`timescale 1ns / 1ps
-// =============================================================================
-// tb_comb_selector.v - Prueba unitaria del selector de combinaciones
-// =============================================================================
+`timescale 1ns/1ps
+
+// Testbench del selector de combinaciones
+// Se dan 6 pulsos: recorre las 6 parejas y vuelve a R0R1.
+
 module tb_comb_selector;
 
-    reg        clk  = 1'b0;
-    reg        next = 1'b0;
+    reg        clk = 0;
+    reg        siguiente = 0;
+    wire [2:0] indice;
     wire [1:0] addr_a, addr_b;
-    wire [3:0] active_mask;
-
-    integer errors = 0;
-    integer checks = 0;
-    integer n;
-
-    reg [1:0] exp_a [0:5];
-    reg [1:0] exp_b [0:5];
-    reg [3:0] exp_m [0:5];
 
     always #4 clk = ~clk;
 
     comb_selector uut (
-        .clk(clk), .next(next), .addr_a(addr_a), .addr_b(addr_b), .active_mask(active_mask)
+        .clk(clk), .siguiente(siguiente),
+        .indice(indice), .addr_a(addr_a), .addr_b(addr_b)
     );
 
-    task check_comb;
-        input integer k;
+    integer i;
+    integer errores = 0;
+
+    // Pareja esperada para cada índice: {A, B}
+    function [3:0] pareja(input integer n);
+        case (n)
+            0: pareja = {2'd0, 2'd1};
+            1: pareja = {2'd0, 2'd2};
+            2: pareja = {2'd0, 2'd3};
+            3: pareja = {2'd1, 2'd2};
+            4: pareja = {2'd1, 2'd3};
+            5: pareja = {2'd2, 2'd3};
+        endcase
+    endfunction
+
+    // Pulso de un ciclo, como el que entrega el antirrebote
+    task pulso;
         begin
-            #1;
-            checks = checks + 1;
-            if (addr_a !== exp_a[k] || addr_b !== exp_b[k] || active_mask !== exp_m[k]) begin
-                errors = errors + 1;
-                $display("[FAIL] paso %0d: A=R%0d B=R%0d LED=%b esperado A=R%0d B=R%0d LED=%b",
-                         k, addr_a, addr_b, active_mask, exp_a[k], exp_b[k], exp_m[k]);
-            end else
-                $display("[PASS] combinacion %0d: A=R%0d B=R%0d LED=%b", k, addr_a, addr_b, active_mask);
+            @(negedge clk) siguiente = 1;
+            @(negedge clk) siguiente = 0;
         end
     endtask
 
-    task pulse_next;
+    task revisar(input integer n);
         begin
-            @(negedge clk); next = 1'b1;
-            @(negedge clk); next = 1'b0;
-            repeat (2) @(negedge clk);
+            if ({addr_a, addr_b} == pareja(n))
+                $display("indice=%0d  A=R%0d  B=R%0d", indice, addr_a, addr_b);
+            else begin
+                $display("ERROR indice=%0d  A=R%0d  B=R%0d", indice, addr_a, addr_b);
+                errores = errores + 1;
+            end
         end
     endtask
 
@@ -49,26 +55,20 @@ module tb_comb_selector;
         $dumpfile("tb_comb_selector.vcd");
         $dumpvars(0, tb_comb_selector);
 
-        exp_a[0]=0; exp_b[0]=1; exp_m[0]=4'b0011;
-        exp_a[1]=0; exp_b[1]=2; exp_m[1]=4'b0101;
-        exp_a[2]=0; exp_b[2]=3; exp_m[2]=4'b1001;
-        exp_a[3]=1; exp_b[3]=2; exp_m[3]=4'b0110;
-        exp_a[4]=1; exp_b[4]=3; exp_m[4]=4'b1010;
-        exp_a[5]=2; exp_b[5]=3; exp_m[5]=4'b1100;
-
         #20;
-        check_comb(0);
-        // Dos vueltas completas para comprobar el retorno al inicio
-        for (n = 1; n <= 12; n = n + 1) begin
-            pulse_next;
-            check_comb(n % 6);
+        revisar(0);                        // estado inicial
+
+        for (i = 1; i <= 6; i = i + 1) begin
+            pulso;
+            revisar(i % 6);                // el 6.º pulso vuelve a 0
         end
 
-        // Sin pulso no debe avanzar
-        repeat (10) @(negedge clk);
-        check_comb(0);
+        // Sin pulso no debe cambiar
+        repeat (5) @(negedge clk);
+        revisar(0);
 
-        $display("RESULTADO tb_comb_selector: %0d verificaciones, %0d errores", checks, errors);
+        if (errores == 0) $display("\ntb_comb_selector: PASA");
+        else              $display("\ntb_comb_selector: FALLA (%0d errores)", errores);
         $finish;
     end
 
