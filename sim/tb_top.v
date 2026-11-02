@@ -4,7 +4,7 @@
 // Escribe R0..R3, ejecuta algunas operaciones y revisa que el
 // resultado solo cambie con BTN3.
 
-module tb_top_simple;
+module tb_top;                       
 
     localparam DEB = 8;                 // en la placa 1_250_000
 
@@ -72,8 +72,8 @@ module tb_top_simple;
     endtask
 
     initial begin
-        $dumpfile("tb_top_simple.vcd");
-        $dumpvars(0, tb_top_simple);
+        $dumpfile("tb_top.vcd");             
+        $dumpvars(0, tb_top);                
 
         repeat (5) @(negedge clk);
 
