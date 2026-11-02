@@ -7,6 +7,7 @@
 - Milton Nicolas Rincón Caicedo - 1021312724
 
 **Semestre:** 2026-2
+
 **Plataforma:** Digilent Zybo Z7-10 (Zynq-7000)
 
 ---
@@ -30,7 +31,7 @@
 
 Se diseñó e implementó un sistema digital de 4 bits sobre la tarjeta Zybo Z7. El sistema permite guardar datos en un banco de cuatro registros, escoger dos de ellos como operandos, operarlos con una unidad aritmético-lógica (ALU) y mostrar el resultado en un display de 7 segmentos controlado por el circuito integrado TM1637.
 
-El sistema se construyó por módulos, donde cada bloque cumple una función concreta, como almacenar datos, seleccionar operandos, calcular o mostrar el resultado, y se prueba por separado antes de integrarlo con los demás en el archivo `top.v`, que se limita a conectar los módulos entre sí y con los pines de la tarjeta. Esta forma de trabajo permite reutilizar bloques y hace que el diseño sea más fácil de entender y de ampliar. Además, el display que será implementado, conserva el resultado de la última operación hasta que se presione BTN3, aunque después cambien los operandos, la combinación de registros o la operación seleccionada. Por esta razón el diseño incluye un registro que guarda el resultado en el momento de la ejecución y lo mantiene mientras no se ejecute una nueva operación.
+El sistema se construyó por módulos, donde cada bloque cumple una función concreta, como almacenar datos, seleccionar operandos, calcular o mostrar el resultado, y se prueba por separado antes de integrarlo con los demás en el archivo `top.v`, que se limita a conectar los módulos entre sí y con los pines de la tarjeta. Esta forma de trabajo permite reutilizar bloques y hace que el diseño sea más fácil de entender y de ampliar. Además, el display  conserva el resultado de la última operación hasta que se presione BTN3, aunque después cambien los operandos, la combinación de registros o la operación seleccionada. Por esta razón el diseño incluye un registro que guarda el resultado en el momento de la ejecución y lo mantiene mientras no se ejecute una nueva operación.
 
 
 ## 2. Descripción del sistema
@@ -87,7 +88,7 @@ Se eligió el formato decimal para la suma y la resta porque en ellas interesa e
 
 ## 3. Arquitectura modular
 
-El diseño se dividió en módulos pequeños, estos se encuentran en siete archivos dentro de la carpeta `src/`, y el archivo `top.v` los instancia y los conecta con los pines de la tarjeta.
+El diseño se dividió en módulos pequeños que se encuentran en siete archivos dentro de la carpeta `src/`, y el archivo `top.v` los instancia y los conecta con los pines de la tarjeta.
 
 ### 3.1 Módulos del diseño
 
@@ -110,15 +111,15 @@ La siguiente tabla presenta los módulos que forman el sistema, el archivo en el
 
 ### 3.2 Conexión entre módulos
 
-Los botones de la tarjeta no se conectan directo a la lógica. Cada uno pasa primero por su módulo `antirrebote`, que entrega una señal `pulso[i]` de un ciclo de reloj, y estos cuatro pulsos controlan el resto del sistema. Los switches, en cambio, llegan sin pasar por ningún filtro (no es necesario) al banco de registros como dato de escritura, y a la ALU y a `reg_resultado` como código de operación.
+Los botones de la tarjeta no se conectan directo a la lógica. Cada uno pasa primero por su módulo `antirrebote`, que entrega una señal `pulso[i]` de un ciclo de reloj, y estos cuatro pulsos controlan el resto del sistema. Los switches, en cambio, llegan sin pasar por ningún filtro, ya que se leen en el momento en que se presiona un botón al banco de registros como dato de escritura, y a la ALU y a `reg_resultado` como código de operación.
 
 La escritura del banco depende de dos pulsos. Con el pulso de BTN0, `sel_escritura` cambia la dirección `addr_w`, que le indica al banco cuál registro escribir y a `rgb_registro` qué color mostrar. Con el pulso de BTN1, el banco guarda el valor de SW[3:0] en esa dirección.
 
-La lectura del banco la controla `comb_selector`, que entrega las direcciones `addr_a` y `addr_b` y las cambia con el pulso de BTN2. El banco usa estas direcciones para colocar en `dato_a` y `dato_b` el contenido de los registros  y `leds_operandos` las usa para encender los LEDs de esa pareja.
+La lectura del banco la controla `comb_selector`, que entrega las direcciones `addr_a` y `addr_b` y las cambia con el pulso de BTN2. El banco usa estas direcciones para colocar en `dato_a` y `dato_b` el contenido de los registros y `leds_operandos` las usa para encender los LEDs de esa pareja.
 
-La ALU recibe `dato_a`, `dato_b` y el código de SW[2:0], y calcula `alu_result` de forma continua, pero este valor no llega directo al display , porque con el pulso de BTN3 `reg_resultado` copia el resultado y el código de la operación en `res_guardado` y `op_guardada`, que son los valores que recibe `display_tm1637`. Este registro intermedio, permite que el display no se altere cuando cambian los operandos o los switches después de una ejecución.
+La ALU recibe `dato_a`, `dato_b` y el código de SW[2:0], y calcula `alu_result` de forma continua, pero este valor no llega directo al display, porque con el pulso de BTN3 `reg_resultado` copia el resultado y el código de la operación en `res_guardado` y `op_guardada`, que son los valores que recibe `display_tm1637`. Este registro intermedio permite que el display no se altere cuando cambian los operandos o los switches después de una ejecución.
 
-Por último, `display_tm1637` genera las señales `tm_clk` y `tm_dio`, que salen por un puerto Pmod JC de la tarjeta hacia el módulo del display.
+Por último, `display_tm1637` genera las señales `tm_clk` y `tm_dio`, que salen por el Pmod JC de la tarjeta hacia el módulo del display.
 
 La siguiente tabla resume las señales internas declaradas en `top.v`, con el módulo que genera cada una y los módulos que la reciben.
 
