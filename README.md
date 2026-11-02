@@ -22,14 +22,15 @@
 7. [Evidencia de funcionamiento en FPGA](#7-evidencia-de-funcionamiento-en-fpga)
 8. [Análisis de resultados](#8-análisis-de-resultados)
 9. [Conclusiones](#9-conclusiones)
+10. [Referencias](#10-referencias)
 
 ---
 
-## 1. Descripción del sistema
+## 1. Introducción
 
 Se diseñó e implementó un sistema digital de 4 bits sobre la tarjeta Zybo Z7. El sistema permite guardar datos en un banco de cuatro registros, escoger dos de ellos como operandos, operarlos con una unidad aritmético-lógica (ALU) y mostrar el resultado en un display de 7 segmentos controlado por el circuito integrado TM1637.
 
-El sistema se construyó por módulos, donde cada bloque cumple una función concreta, como almacenar datos, seleccionar operandos, calcular o mostrar el resultado, y se prueba por separado antes de integrarlo con los demás en el archivo `top.v`, que se limita a conectar los módulos entre sí y con los pines de la tarjeta. Esta forma de trabajo nos permite reutilizar bloques y hace que el diseño sea más fácil de entender y de ampliar. Además, el display que será implementado, conserva el resultado de la última operación hasta que se presione BTN3, aunque después cambien los operandos, la combinación de registros o la operación seleccionada. Por esta razón el diseño incluye un registro que guarda el resultado en el momento de la ejecución y lo mantiene mientras no se ejecute una nueva operación.
+El sistema se construyó por módulos, donde cada bloque cumple una función concreta, como almacenar datos, seleccionar operandos, calcular o mostrar el resultado, y se prueba por separado antes de integrarlo con los demás en el archivo `top.v`, que se limita a conectar los módulos entre sí y con los pines de la tarjeta. Esta forma de trabajo permite reutilizar bloques y hace que el diseño sea más fácil de entender y de ampliar. Además, el display que será implementado, conserva el resultado de la última operación hasta que se presione BTN3, aunque después cambien los operandos, la combinación de registros o la operación seleccionada. Por esta razón el diseño incluye un registro que guarda el resultado en el momento de la ejecución y lo mantiene mientras no se ejecute una nueva operación.
 
 
 ## 2. Descripción del sistema
@@ -81,6 +82,7 @@ La ALU realiza ocho operaciones, dos aritméticas y seis lógicas, que se eligen
 | 110 | NOT | NOT A | Binario |
 | 111 | NAND | A NAND B | Binario |
 
+Se eligió el formato decimal para la suma y la resta porque en ellas interesa el valor numérico del resultado, y el binario para las operaciones lógicas porque actúan sobre cada bit por separado,
 
 
 ## 3. Arquitectura modular
@@ -106,7 +108,7 @@ La siguiente tabla presenta los módulos que forman el sistema, el archivo en el
 
 
 
-### 3.3 Conexión entre módulos
+### 3.2 Conexión entre módulos
 
 Los botones de la tarjeta no se conectan directo a la lógica. Cada uno pasa primero por su módulo `antirrebote`, que entrega una señal `pulso[i]` de un ciclo de reloj, y estos cuatro pulsos controlan el resto del sistema. Los switches, en cambio, llegan sin pasar por ningún filtro (no es necesario) al banco de registros como dato de escritura, y a la ALU y a `reg_resultado` como código de operación.
 
@@ -114,7 +116,7 @@ La escritura del banco depende de dos pulsos. Con el pulso de BTN0, `sel_escritu
 
 La lectura del banco la controla `comb_selector`, que entrega las direcciones `addr_a` y `addr_b` y las cambia con el pulso de BTN2. El banco usa estas direcciones para colocar en `dato_a` y `dato_b` el contenido de los registros  y `leds_operandos` las usa para encender los LEDs de esa pareja.
 
-La ALU recibe `dato_a`, `dato_b` y el código de SW[2:0], y calcula `alu_result` de forma continua, pero este valor no llega directo al display , porque con el pulso de BTN3 `reg_resultado` copia el resultado y el código de la operación en `res_guardado` y `op_guardada`, que son los valores que recibe `display_tm1637`. Este registro intermedio, permite que el display no se altera cuando cambian los operandos o los switches después de una ejecución.
+La ALU recibe `dato_a`, `dato_b` y el código de SW[2:0], y calcula `alu_result` de forma continua, pero este valor no llega directo al display , porque con el pulso de BTN3 `reg_resultado` copia el resultado y el código de la operación en `res_guardado` y `op_guardada`, que son los valores que recibe `display_tm1637`. Este registro intermedio, permite que el display no se altere cuando cambian los operandos o los switches después de una ejecución.
 
 Por último, `display_tm1637` genera las señales `tm_clk` y `tm_dio`, que salen por un puerto Pmod JC de la tarjeta hacia el módulo del display.
 
@@ -131,13 +133,12 @@ La siguiente tabla resume las señales internas declaradas en `top.v`, con el m�
 | `op_guardada` | 3 | `reg_resultado` | `display_tm1637` |
 
 
-El archivo `top.v` no contiene lógica propia. Simplemente se usa para declarar las señales internas, instanciar los módulos y conectar sus puertos con los switches, los botones, los LEDs y el puerto Pmod.
+El archivo `top.v` no contiene lógica propia. Simplemente se usa para declarar las señales internas, instanciar los módulos y conectar sus puertos con los switches, los botones, los LEDs y el puerto Pmod JC.
 
-El módulo tiene dos parámetros, `DEBOUNCE` y `TM_DIV`, que fijan el tiempo del antirrebote y la velocidad del bus del display. En la placa valen 1 250 000 y 625 ciclos de reloj, que equivalen a 10 ms y 5 µs a 125 MHz. En la simulación se reducen para que las pruebas terminen en poco tiempo, sin modificar el código de los módulos.
-
+El módulo tiene dos parámetros, `DEBOUNCE` y `TM_DIV`, que fijan el tiempo del antirrebote y la velocidad del bus del display. En la placa valen 1 250 000 y 625 ciclos de reloj, que equivalen a 10 ms y 5 µs a 125 MHz. En la simulación se reducen para que las pruebas terminen en menos tiempo.
 ## 4. Diseño de los módulos
 
-Para describir el funcionamiento interno de cada módulo, se va a realizar el recorrido desde las señales desde los botones hasta los indicadores.
+En este capítulo se describe el funcionamiento interno de cada módulo, siguiendo el recorrido de las señales desde los botones hasta los indicadores.
 
 ### 4.1 Antirrebote
 
@@ -196,7 +197,7 @@ Con cuatro registros existen seis parejas distintas si no se repite un registro 
 | 4 | 1 | 3 | R1, R3 |
 | 5 | 2 | 3 | R2, R3 |
 
-Como el índice tiene 3 bits puede tomar los valores 6 y 7, pero el contador nunca los alcanza, entonces se incluye una opción `default` que asigna la primera pareja, con lo que todas las salidas quedan definidas y no infieren latches (elementos de memoria no deseados).
+Como el índice tiene 3 bits puede tomar los valores 6 y 7, pero el contador nunca los alcanza, entonces se incluye una opción `default` que asigna la primera pareja, con lo que todas las salidas quedan definidas y se evita que el circuito incluya latches (elementos de memoria no deseados).
 
 ### 4.4 Unidad aritmético-lógica
 
@@ -222,7 +223,8 @@ Las operaciones lógicas se aplican bit a bit, por lo tanto, cada bit del result
 
 ### 4.5 Registro del resultado
 
-El módulo `reg_resultado` es el que permite que el display conserve el último resultado. Contiene dos registros, `result` de 4 bits y `op` de 3 bits, que copian la salida de la ALU y el código de operación en el ciclo en que llega el pulso de BTN3 y además mantiene su valor mientras ese pulso no se repita, aunque cambien los operandos o los switches. Descrito de la siguiente manera:
+El módulo `reg_resultado` es el que permite que el display conserve el último resultado. Contiene dos registros, `result` de 4 bits y `op` de 3 bits, que copian la salida de la ALU y el código de operación en el ciclo en que llega el pulso de BTN3 y además mantienen su valor mientras ese pulso no se repita, aunque cambien los operandos o los switches. Descrito de la siguiente manera:
+
 ```verilog
 always @(posedge clk) begin
     if (ejecutar) begin
@@ -238,9 +240,10 @@ Ambos registros inician en cero, es decir, a una suma con resultado 0, por lo qu
 
 ### 4.6 Display TM1637
 
-El módulo `display_tm1637` agrupa dos submódulos.
 
-El módulo `display_tm1637` agrupa dos submódulos. El primero, `formato_display`, es combinacional y convierte la operación y el resultado guardados en los cuatro bytes que indican qué segmentos se encienden en cada dígito, mientras que el segundo, `tm1637_driver`, envía esos bytes al TM1637 por medio de una máquina de estados que genera las dos señales del bus en serie, el reloj `tm_clk` y la línea de datos `tm_dio`.
+El módulo `display_tm1637` agrupa dos submódulos. 
+
+El primero, `formato_display`, es combinacional y convierte la operación y el resultado guardados en los cuatro bytes que indican qué segmentos se encienden en cada dígito, mientras que el segundo, `tm1637_driver`, envía esos bytes al TM1637 por medio de una máquina de estados que genera las dos señales del bus en serie, el reloj `tm_clk` y la línea de datos `tm_dio`.
 
 ### 4.7 Indicadores
 
@@ -591,3 +594,14 @@ El resultado de NOT es el mismo en ambas parejas porque depende de `A`, que en l
 - **Estrategia de visualización.** El formato decimal facilita la lectura del resultado de la suma y la resta, mientras que el binario permite comprobar bit a bit las operaciones lógicas aprovechando los cuatro dígitos del display.
 - **Comunicación con el TM1637.** El display requirió implementar un protocolo serie de dos líneas parecido a I2C, con condiciones de START y STOP, envío del bit menos significativo primero y confirmación (ACK) por parte del receptor, y simularlo con un modelo del chip permitió verificar la trama bit a bit.
 - **Flujo de diseño.** El desarrollo siguió el flujo completo de un sistema digital, desde la especificación y el diseño hasta la simulación y la implementación.
+
+## 10. Referencias
+
+
+
+1. Titan Micro Electronics, *TM1637 LED Drive Control Special Circuit*, hoja de datos.
+2. Digilent, *Zybo Z7 Reference Manual*. Disponible en https://digilent.com/reference/programmable-logic/zybo-z7/reference-manual
+3. Digilent, *Zybo-Z7-Master.xdc*, archivo de restricciones de referencia para la Zybo Z7. Disponible en https://github.com/Digilent/digilent-xdc
+4. S. Williams, *Icarus Verilog*, documentación. Disponible en https://steveicarus.github.io/iverilog/
+5. T. Bybell, *GTKWave*, documentación. Disponible en https://gtkwave.sourceforge.net/
+6. AMD Xilinx, *Vivado Design Suite User Guide: Using Constraints* (UG903).
